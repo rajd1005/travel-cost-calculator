@@ -1,0 +1,159 @@
+/* Global Wrapper */
+.tcc-wrapper {
+    font-family: inherit;
+    max-width: 800px;
+    margin: 0 auto;
+    color: #333;
+    font-size: 13px;
+}
+
+.tcc-wrapper * { box-sizing: border-box; }
+
+/* Ultra-Compact Panels */
+.tcc-card {
+    background: #fff;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    border: 1px solid #e2e8f0;
+    border-radius: 3px;
+}
+
+.tcc-card-title {
+    font-size: 14px;
+    font-weight: bold;
+    margin: 0 0 6px 0;
+    color: #111;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 4px;
+}
+
+/* Grids (Tight Spacing) */
+.tcc-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
+.tcc-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 4px; }
+
+/* Native-Style Form Elements */
+.tcc-form-group { margin-bottom: 4px; }
+.tcc-form label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #444;
+    margin-bottom: 2px;
+}
+.tcc-form input, .tcc-form select, .tcc-form textarea {
+    width: 100%;
+    border-radius: 3px;
+    border: 1px solid #ccc;
+    background: #fff;
+    font-size: 12px;
+    color: #333;
+    margin-bottom: 0 !important;
+}
+
+.tcc-form input, .tcc-form select {
+    height: 28px !important;
+    padding: 2px 6px;
+}
+
+/* Multi-select specific height fix */
+.tcc-form select[multiple] { 
+    height: 45px !important; 
+    padding: 2px; 
+    overflow-y: auto;
+}
+
+.tcc-form input:focus, .tcc-form select:focus, .tcc-form textarea:focus {
+    border-color: #b93b59;
+    outline: none;
+    box-shadow: 0 0 3px rgba(185, 59, 89, 0.2);
+}
+
+/* Repeaters (Transport & Hotels) */
+.tcc-repeater-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 4px;
+}
+.tcc-repeater-row > * { flex: 1; }
+
+/* BUTTONS */
+.tcc-wrapper .tcc-btn-primary, 
+.tcc-wrapper .tcc-btn-secondary, 
+.tcc-wrapper .tcc-repeater-row .tcc-btn-del {
+    background-color: transparent !important; 
+    color: #b93b59 !important;                
+    border: 1px solid #b93b59 !important;     
+    font-size: 13px !important;
+    padding: 4px 12px !important;
+    border-radius: 3px !important;
+    cursor: pointer !important;
+    font-weight: normal !important;
+    text-align: center !important;
+    transition: 0.2s ease !important;
+    display: inline-block !important;
+    height: 28px !important; 
+    line-height: 1.2 !important;
+    box-shadow: none !important;
+}
+
+.tcc-wrapper .tcc-btn-primary {
+    width: auto !important;
+    min-width: 150px !important;
+    margin-top: 10px !important;
+}
+
+/* Hover effects */
+.tcc-wrapper .tcc-btn-primary:hover, 
+.tcc-wrapper .tcc-btn-secondary:hover, 
+.tcc-wrapper .tcc-repeater-row .tcc-btn-del:hover { 
+    background-color: #b93b59 !important; 
+    color: #ffffff !important;
+}
+
+.tcc-wrapper .tcc-repeater-row .tcc-btn-del {
+    flex: 0 0 28px !important;
+    padding: 0 !important;
+    line-height: 26px !important;
+}
+
+/* Light & Clean Live Preview Panel */
+.tcc-preview-panel { 
+    background: #f8fafc; 
+    border: 1px solid #e2e8f0;
+    border-radius: 3px; 
+    padding: 8px; 
+    margin-top: 6px; 
+    color: #333;
+}
+.tcc-preview-val { font-size: 18px; font-weight: bold; color: #3182ce; }
+.tcc-preview-profit { color: #16a34a; }
+.tcc-preview-loss { color: #dc2626; }
+.tcc-preview-sub { 
+    display: flex; 
+    justify-content: space-between; 
+    font-size: 11px; 
+    margin-top: 5px; 
+    padding-top: 5px; 
+    border-top: 1px dashed #cbd5e1; 
+}
+
+/* Accordions for Settings */
+.tcc-accordion { margin-bottom: 5px; border: 1px solid #ddd; border-radius: 3px; }
+.tcc-accordion-header {
+    background: #f9f9f9;
+    padding: 6px 10px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+}
+.tcc-accordion-body { padding: 8px; display: none; background: #fff; }
+
+/* Mobile Optimizations */
+@media (max-width: 500px) {
+    .tcc-grid-3, .tcc-grid-2 { grid-template-columns: 1fr; gap: 4px; }
+    .tcc-repeater-row { flex-direction: column; align-items: stretch; border: 1px solid #eee; padding: 4px; border-radius: 3px; }
+    .tcc-wrapper .tcc-repeater-row .tcc-btn-del { flex: auto !important; height: 28px !important; margin-top: 2px !important; }
+}
