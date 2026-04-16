@@ -73,6 +73,7 @@ function tcc_render_followup_dashboard() {
             'id' => $q->ID,
             'client_name' => !empty($d['client_name']) ? $d['client_name'] : 'Unknown Client',
             'client_phone' => (!empty($d['client_phone']) && trim($d['client_phone']) !== '') ? $d['client_phone'] : 'N/A',
+            'client_email' => !empty($d['client_email']) ? $d['client_email'] : '',
             'destination' => $d['destination'],
             'start_date' => $start_date,
             'pax' => $pax,
@@ -136,17 +137,18 @@ function tcc_render_followup_dashboard() {
             }
             
             .tcc-lead-table td { padding: 0; border: none; text-align: left; }
-            .tcc-lead-table td:nth-child(1) { position: absolute; top: 10px; right: 12px; width: auto; z-index: 10; }
-            .tcc-lead-table td:nth-child(2) { margin-bottom: 8px; padding-right: 30px; }
-            .tcc-lead-table td:nth-child(2) strong { font-size: 14px; color: #0f172a; }
-            .tcc-lead-table td:nth-child(3) { background: #f8fafc; padding: 8px; border-radius: 4px; border: 1px dashed #cbd5e1; margin-bottom: 10px; font-size: 12px; }
-            .tcc-lead-table td:nth-child(4), .tcc-lead-table td:nth-child(5) { display: inline-block; width: 48%; vertical-align: top; }
-            .tcc-lead-table td:nth-child(4) { margin-right: 2%; }
-            .tcc-lead-table td:nth-child(4)::before { content:"Status"; display:block; font-size:10px; color:#64748b; margin-bottom:2px; font-weight:bold; }
-            .tcc-lead-table td:nth-child(5)::before { content:"Follow-up Date"; display:block; font-size:10px; color:#64748b; margin-bottom:2px; font-weight:bold; }
+            .tcc-lead-table td:nth-child(1) { display: none; } /* hide index on mobile */
+            .tcc-lead-table td:nth-child(2) { position: absolute; top: 10px; right: 12px; width: auto; z-index: 10; }
+            .tcc-lead-table td:nth-child(3) { margin-bottom: 8px; padding-right: 30px; }
+            .tcc-lead-table td:nth-child(3) strong { font-size: 14px; color: #0f172a; }
+            .tcc-lead-table td:nth-child(4) { background: #f8fafc; padding: 8px; border-radius: 4px; border: 1px dashed #cbd5e1; margin-bottom: 10px; font-size: 12px; }
+            .tcc-lead-table td:nth-child(5), .tcc-lead-table td:nth-child(6) { display: inline-block; width: 48%; vertical-align: top; }
+            .tcc-lead-table td:nth-child(5) { margin-right: 2%; }
+            .tcc-lead-table td:nth-child(5)::before { content:"Status"; display:block; font-size:10px; color:#64748b; margin-bottom:2px; font-weight:bold; }
+            .tcc-lead-table td:nth-child(6)::before { content:"Follow-up Date"; display:block; font-size:10px; color:#64748b; margin-bottom:2px; font-weight:bold; }
             .lead-status-select, .lead-date-input { width: 100%; }
-            .tcc-lead-table td:nth-child(6) { margin-top: 12px; padding-top: 10px; border-top: 1px solid #f1f5f9; }
-            .tcc-lead-table td:nth-child(6) > div { justify-content: flex-start; gap: 8px; }
+            .tcc-lead-table td:nth-child(7) { margin-top: 12px; padding-top: 10px; border-top: 1px solid #f1f5f9; }
+            .tcc-lead-table td:nth-child(7) > div { justify-content: flex-start; gap: 8px; }
             .lead-save-btn, .lead-wa-btn { padding: 6px 12px; font-size: 12px; font-weight: bold; }
         }
     </style>
@@ -155,15 +157,36 @@ function tcc_render_followup_dashboard() {
         <div class="tcc-card" style="margin-bottom:0; background:transparent; box-shadow:none; border:none; padding:0;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px; flex-wrap:wrap; gap:10px;">
                 <h2 style="margin:0; color:#0f172a; font-size:18px;">Quotation Follow-up Dashboard</h2>
-                <select id="lead_view_filter" style="padding:6px 10px; border-radius:4px; border:1px solid #ccc; font-size:13px;">
-                    <option value="active">View Active Leads</option>
-                    <option value="all">View All (Including Completed & Expired)</option>
-                </select>
+                
+                <div style="font-size:13px; font-weight:bold; color:#334155; background:#e2e8f0; padding:6px 12px; border-radius:20px;">
+                    Showing <span id="lead_row_count" style="color:#b93b59;">0</span> lead(s)
+                </div>
+            </div>
+
+              <div style="display:flex; flex-wrap:wrap; gap:20px; background:#f8fafc; padding:15px; border:1px solid #cbd5e1; border-radius:6px; margin-bottom: 15px;">
+                
+                <div style="flex: 2; display: flex; flex-direction: column; justify-content: flex-end; gap: 15px; min-width: 250px;">
+                    <input type="text" id="lead_search" placeholder="Search Phone, Email, Name..." style="padding:8px 12px; border-radius:4px; border:1px solid #ccc; font-size:13px; width:100%; box-sizing:border-box;">
+                    
+                    <select id="lead_view_filter" style="padding:8px 12px; border-radius:4px; border:1px solid #ccc; font-size:13px; width:100%; box-sizing:border-box;">
+                        <option value="active">View Active Leads Only</option>
+                        <option value="all">View All (Including Completed & Expired)</option>
+                    </select>
+                </div>
+
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 200px;">
+                    <label style="font-size:12px; color:#475569; font-weight:bold; margin-bottom:-2px;">Quote Date:</label>
+                    <input type="date" id="lead_date_from" style="padding:8px 12px; border-radius:4px; border:1px solid #ccc; font-size:13px; width:100%; box-sizing:border-box;" title="Start Date">
+                    <div style="font-size:12px; color:#475569; padding-left:2px;">to</div>
+                    <input type="date" id="lead_date_to" style="padding:8px 12px; border-radius:4px; border:1px solid #ccc; font-size:13px; width:100%; box-sizing:border-box;" title="End Date">
+                </div>
+                
             </div>
 
             <table class="tcc-lead-table" id="tcc_leads_table">
                 <thead>
                     <tr>
+                        <th style="width:40px; text-align:center;">#</th>
                         <th title="High Priority">⭐</th>
                         <th>Client Details</th>
                         <th>Trip Specs</th>
@@ -179,18 +202,21 @@ function tcc_render_followup_dashboard() {
                         $tr_class = 'lead-row ' . ($l['is_active'] ? 'lead-active' : 'lead-inactive');
                         if($l['is_expired']) $tr_class .= ' lead-expired';
                         
-                        // REMOVED CLIENT NAME TO AVOID AWKWARD MESSAGES
+                        $search_string = strtolower($l['client_name'] . ' ' . $l['client_phone'] . ' ' . $l['client_email']);
+                        
                         $wa_msg = rawurlencode("Hello,\nJust following up regarding your trip inquiry for {$l['destination']}. Let me know if you have any questions!\nView Quote: {$l['link']}");
                         $wa_link = "https://wa.me/" . preg_replace('/[^0-9]/', '', $l['client_phone']) . "?text=" . $wa_msg;
                     ?>
-                    <tr class="<?php echo $tr_class; ?>" data-id="<?php echo $l['id']; ?>">
+                    <tr class="<?php echo $tr_class; ?>" data-id="<?php echo $l['id']; ?>" data-search-string="<?php echo esc_attr($search_string); ?>" data-quote-date="<?php echo esc_attr($l['quote_date']); ?>">
+                        <td style="text-align:center; font-weight:bold; color:#64748b;"><span class="row-count-idx"></span></td>
                         <td>
                             <span class="star-priority <?php echo $l['is_priority'] ? 'active' : ''; ?>" title="Toggle High Priority">★</span>
                             <input type="hidden" class="val-priority" value="<?php echo $l['is_priority']; ?>">
                         </td>
                         <td>
                             <strong><?php echo esc_html($l['client_name']); ?></strong><br>
-                            <span style="color:#64748b; font-size:11px;">📞 <?php echo esc_html($l['client_phone']); ?></span>
+                            <span style="color:#64748b; font-size:11px;">📞 <?php echo esc_html($l['client_phone']); ?></span><br>
+                            <span style="color:#94a3b8; font-size:10px;">Created: <?php echo date('d M Y', strtotime($l['quote_date'])); ?></span>
                             <?php if($l['is_expired']): ?>
                                 <br><span style="color:#dc2626; font-size:10px; font-weight:bold;">[Trip Date Passed]</span>
                             <?php endif; ?>
@@ -226,7 +252,7 @@ function tcc_render_followup_dashboard() {
                     endforeach; 
                     
                     if($count == 0): ?>
-                        <tr class="lead-row lead-active"><td colspan="6" style="text-align:center; padding:30px;">No Quotes/Leads Generated Yet.</td></tr>
+                        <tr class="lead-row lead-active"><td colspan="7" style="text-align:center; padding:30px;">No Quotes/Leads Generated Yet.</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>
@@ -249,11 +275,32 @@ function tcc_render_followup_dashboard() {
         function renderTable() {
             let $rows = $('#tcc_leads_tbody tr.lead-row');
             let viewFilter = $('#lead_view_filter').val();
+            let searchTerm = $('#lead_search').val().toLowerCase();
+            let dateFrom = $('#lead_date_from').val();
+            let dateTo = $('#lead_date_to').val();
             
             let $filteredRows = $rows.filter(function() {
-                if (viewFilter === 'active') return $(this).hasClass('lead-active');
-                return true; 
+                let show = true;
+                if (viewFilter === 'active' && !$(this).hasClass('lead-active')) show = false;
+                
+                let searchStr = $(this).data('search-string') || '';
+                if (searchTerm && searchStr.indexOf(searchTerm) === -1) show = false;
+
+                let qDate = $(this).data('quote-date'); 
+                if (dateFrom && qDate < dateFrom) show = false;
+                if (dateTo && qDate > dateTo) show = false;
+
+                return show;
             });
+
+            // Update row index numbers dynamically based on filtered set
+            let displayIdx = 1;
+            $filteredRows.each(function() {
+                $(this).find('.row-count-idx').text(displayIdx++);
+            });
+
+            // Update Row Counter Header
+            $('#lead_row_count').text($filteredRows.length);
 
             let totalRows = $filteredRows.length;
             let totalPages = Math.ceil(totalRows / rowsPerPage);
@@ -274,7 +321,7 @@ function tcc_render_followup_dashboard() {
 
         $('#tcc_prev_page').click(function() { if(currentPage > 1) { currentPage--; renderTable(); } });
         $('#tcc_next_page').click(function() { currentPage++; renderTable(); });
-        $('#lead_view_filter').change(function() { currentPage = 1; renderTable(); });
+        $('#lead_view_filter, #lead_search, #lead_date_from, #lead_date_to').on('input change', function() { currentPage = 1; renderTable(); });
 
         renderTable();
 

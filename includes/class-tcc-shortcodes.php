@@ -50,9 +50,10 @@ function tcc_render_calculator_form() {
 
         <form id="tcc-calc-form" class="tcc-form">
             
-            <div class="tcc-card" style="background:#f8fafc; border-color:#cbd5e1; display:flex; justify-content:space-between; align-items:center; padding:10px 15px;">
-                <strong style="color:#334155; font-size:14px;">✏️ Load Quote to Edit:</strong>
-                <select id="calc_edit_quote_select" style="max-width:250px; margin:0; font-size:13px;">
+            <div class="tcc-card" style="background:#f8fafc; border-color:#cbd5e1; display:flex; justify-content:space-between; align-items:center; padding:10px 15px; flex-wrap:wrap; gap:10px;">
+                <strong style="color:#334155; font-size:14px; margin-right:auto;">✏️ Load Quote to Edit:</strong>
+                <input type="text" id="calc_quote_search" placeholder="Search Name, Phone, Email..." style="padding:4px 8px; font-size:13px; width:200px; border:1px solid #ccc; border-radius:3px; margin:0;">
+                <select id="calc_edit_quote_select" style="max-width:250px; margin:0; font-size:13px; flex:1;">
                     <option value="">-- Create New Quote --</option>
                 </select>
                 <input type="hidden" name="edit_quote_id" id="edit_quote_id" value="">
@@ -281,7 +282,6 @@ function tcc_render_calculator_form() {
     return ob_get_clean();
 }
 
-// ... (Rest of tcc-shortcodes.php settings dashboard remains completely identical)
 function tcc_render_settings_dashboard() {
     if ( ! is_user_logged_in() ) {
         return '<div style="padding:40px; text-align:center; color:#dc2626; font-family:sans-serif; background:#fee2e2; border:1px solid #f87171; border-radius:6px; margin:20px 0;"><strong>Access Denied:</strong> Please log in to access the Settings Dashboard.</div>';

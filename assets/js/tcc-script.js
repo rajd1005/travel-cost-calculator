@@ -258,7 +258,7 @@ jQuery(document).ready(function($) {
 
     let liveCalcTimeout;
     $('#tcc-calc-form').on('input change', 'input, select', function(e) {
-        if(e.target.id === 'tcc_calculate_btn' || e.target.id === 'client_name' || e.target.id === 'client_phone' || e.target.id === 'client_email' || e.target.id === 'calc_edit_quote_select') return;
+        if(e.target.id === 'tcc_calculate_btn' || e.target.id === 'client_name' || e.target.id === 'client_phone' || e.target.id === 'client_email' || e.target.id === 'calc_edit_quote_select' || e.target.id === 'calc_quote_search') return;
         if(e.target.id !== 'total_pax' && e.target.id !== 'child_pax' && e.target.id !== 'calc_pickup') {
             triggerLiveCalculation();
         }
@@ -296,7 +296,6 @@ jQuery(document).ready(function($) {
                 if(res.success) {
                     let d = res.data;
                     
-                    // FIXED MAPPING
                     $('#live_pp_base').text(formatINR(d.summary_data.per_person_excl_gst));
                     $('#live_pp_inc').text(formatINR(d.summary_data.per_person_with_gst));
                     $('#live_total_base').text(formatINR(d.summary_data.total_base_price));
@@ -411,7 +410,6 @@ jQuery(document).ready(function($) {
         let d = window.tccLastQuoteData.summary_data;
         let pp_gst = formatINR(d.per_person_with_gst || (window.tccLastQuoteData.grand_total / Math.max(1, d.pax)));
         
-        // FIXED MAPPING FOR WA TEXT
         let pp_base = formatINR(d.per_person_excl_gst);
         let gst = formatINR(window.tccLastQuoteData.gst);
         let discount = d.discount_amount > 0 ? formatINR(d.discount_amount) : 0;
@@ -611,31 +609,41 @@ jQuery(document).ready(function($) {
     // --- BOOKING & PAYMENTS MANAGER LOGIC ---
     window.tccAllQuotes = [];
 
-    function renderQuotesDropdown(filterText = '') {
+    function renderQuotesDropdown(filterText = '', filterType = 'both') {
         let term = filterText.toLowerCase();
         
-        let $selPmt = $('#pmt_quote_select');
-        if($selPmt.length > 0) {
-            $selPmt.empty().append('<option value="">-- Select Quote/Booking --</option>');
-            $.each(window.tccAllQuotes, function(i, q) {
-                let searchStr = `${q.title} ${q.c_name} ${q.c_phone} ${q.c_email}`.toLowerCase();
-                if(term === '' || searchStr.includes(term)) {
-                    let details = [];
-                    if(q.c_name) details.push(q.c_name);
-                    if(q.c_phone) details.push(q.c_phone);
-                    let label = q.title + (details.length ? ' [' + details.join(' | ') + ']' : ' [No Client Details]');
-                    $selPmt.append($('<option></option>').val(q.id).text(label));
-                }
-            });
+        if (filterType === 'both' || filterType === 'pmt') {
+            let $selPmt = $('#pmt_quote_select');
+            if($selPmt.length > 0) {
+                $selPmt.empty().append('<option value="">-- Select Quote/Booking --</option>');
+                $.each(window.tccAllQuotes, function(i, q) {
+                    let searchStr = `${q.title} ${q.c_name} ${q.c_phone} ${q.c_email}`.toLowerCase();
+                    if(term === '' || searchStr.includes(term)) {
+                        let details = [];
+                        if(q.c_name) details.push(q.c_name);
+                        if(q.c_phone) details.push(q.c_phone);
+                        let label = q.title + (details.length ? ' [' + details.join(' | ') + ']' : ' [No Client Details]');
+                        $selPmt.append($('<option></option>').val(q.id).text(label));
+                    }
+                });
+            }
         }
 
-        let $selCalc = $('#calc_edit_quote_select');
-        if($selCalc.length > 0 && term === '') {
-            $selCalc.find('option:not(:first)').remove();
-            $.each(window.tccAllQuotes, function(i, q) {
-                let label = q.title;
-                $selCalc.append($('<option></option>').val(q.id).text(label));
-            });
+        if (filterType === 'both' || filterType === 'calc') {
+            let $selCalc = $('#calc_edit_quote_select');
+            if($selCalc.length > 0) {
+                $selCalc.empty().append('<option value="">-- Create New Quote --</option>');
+                $.each(window.tccAllQuotes, function(i, q) {
+                    let searchStr = `${q.title} ${q.c_name} ${q.c_phone} ${q.c_email}`.toLowerCase();
+                    if(term === '' || searchStr.includes(term)) {
+                        let details = [];
+                        if(q.c_name) details.push(q.c_name);
+                        if(q.c_phone) details.push(q.c_phone);
+                        let label = q.title + (details.length ? ' [' + details.join(' | ') + ']' : '');
+                        $selCalc.append($('<option></option>').val(q.id).text(label));
+                    }
+                });
+            }
         }
     }
 
@@ -643,10 +651,15 @@ jQuery(document).ready(function($) {
         $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_load_quotes_list' }, function(res) {
             if(res.success) {
                 window.tccAllQuotes = res.data;
-                renderQuotesDropdown($('#pmt_quote_search').val() || '');
+                renderQuotesDropdown($('#pmt_quote_search').length ? $('#pmt_quote_search').val() : '', 'pmt');
+                renderQuotesDropdown($('#calc_quote_search').length ? $('#calc_quote_search').val() : '', 'calc');
             }
         });
     }
+
+    $('#calc_quote_search').on('input', function() {
+        renderQuotesDropdown($(this).val(), 'calc');
+    });
 
     $('#calc_edit_quote_select').on('change', function() {
         let qid = $(this).val();
@@ -731,7 +744,7 @@ jQuery(document).ready(function($) {
 
 
     $('#pmt_quote_search').on('input', function() {
-        renderQuotesDropdown($(this).val());
+        renderQuotesDropdown($(this).val(), 'pmt');
         $('#pmt_dashboard, #pmt_quote_actions, #pmt_edit_client_wrapper').hide();
     });
 
@@ -831,11 +844,11 @@ jQuery(document).ready(function($) {
             btn.text('Save Details').prop('disabled', false);
             if(res.success) {
                 $('#pmt_edit_client_wrapper').slideUp();
-                let currentSearch = $('#pmt_quote_search').val();
                 $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_load_quotes_list' }, function(res2) {
                     if(res2.success) {
                         window.tccAllQuotes = res2.data;
-                        renderQuotesDropdown(currentSearch);
+                        renderQuotesDropdown($('#pmt_quote_search').length ? $('#pmt_quote_search').val() : '', 'pmt');
+                        renderQuotesDropdown($('#calc_quote_search').length ? $('#calc_quote_search').val() : '', 'calc');
                         $('#pmt_quote_select').val(qid).trigger('change');
                     }
                 });
