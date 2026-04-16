@@ -1444,4 +1444,92 @@ jQuery(document).ready(function($) {
             if(res.success) showSettingsMessage(res.data.message);
         });
     });
+
+    // --- BACKUP & RESTORE LOGIC ---
+    
+$('#tcc_export_btn').on('click', function() {
+        let btn = $(this);
+        let originalText = btn.text();
+        btn.text('Exporting...').prop('disabled', true);
+        
+        $.ajax({
+            url: tcc_ajax_obj.ajax_url,
+            type: 'POST',
+            data: { action: 'tcc_export_backup' },
+            success: function(res) {
+                btn.text(originalText).prop('disabled', false);
+                if(res.success) {
+                    try {
+                        let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(res.data));
+                        let downloadAnchorNode = document.createElement('a');
+                        downloadAnchorNode.setAttribute("href", dataStr);
+                        
+                        let dateStr = new Date().toISOString().split('T')[0];
+                        downloadAnchorNode.setAttribute("download", "tcc_backup_" + dateStr + ".json");
+                        
+                        document.body.appendChild(downloadAnchorNode); 
+                        downloadAnchorNode.click();
+                        downloadAnchorNode.remove();
+                        
+                        showSettingsMessage("Backup downloaded successfully!");
+                    } catch (e) {
+                        alert("Error generating file. The data might be too large.");
+                        console.error(e);
+                    }
+                } else {
+                    alert("Export failed: " + (res.data || "You might not have permission."));
+                }
+            },
+            error: function(xhr, status, error) {
+                btn.text(originalText).prop('disabled', false);
+                alert("A server error occurred. Please check your browser console (F12) for details.");
+                console.error("Export Server Error:", status, error);
+                console.error("Response Text:", xhr.responseText);
+            }
+        });
+    });
+
+    $('#tcc_import_btn').on('click', function() {
+        let fileInput = $('#tcc_import_file')[0];
+        let file = fileInput.files[0];
+        
+        if(!file) {
+            alert("Please select a .json backup file first.");
+            return;
+        }
+        
+        if(!confirm("CRITICAL WARNING:\n\nRestoring a backup will instantly wipe all current Master Settings, Quotes, Rates, and Clients, replacing them with the uploaded file.\n\nAre you absolutely sure you want to proceed?")) {
+            return;
+        }
+        
+        let btn = $(this);
+        let originalText = btn.text();
+        btn.text('Restoring Data...').prop('disabled', true);
+
+        // Read file contents via HTML5 FileReader
+        let reader = new FileReader();
+        reader.onload = function(e) {
+            $.ajax({
+                url: tcc_ajax_obj.ajax_url + '?action=tcc_import_backup',
+                type: 'POST',
+                contentType: 'application/json',
+                data: e.target.result,
+                success: function(res) {
+                    if(res.success) {
+                        alert(res.data);
+                        location.reload(); // Refresh the page to load new settings
+                    } else {
+                        btn.text(originalText).prop('disabled', false);
+                        alert("Restore failed: " + (res.data || 'Invalid file format.'));
+                    }
+                },
+                error: function() {
+                    btn.text(originalText).prop('disabled', false);
+                    alert("A server error occurred during the restore process.");
+                }
+            });
+        };
+        reader.readAsText(file);
+    });
+
 });

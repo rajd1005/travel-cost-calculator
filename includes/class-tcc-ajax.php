@@ -39,6 +39,10 @@ add_action( 'wp_ajax_tcc_delete_quote', 'tcc_delete_quote' );
 add_action( 'wp_ajax_tcc_update_quote_client', 'tcc_update_quote_client' );
 add_action( 'wp_ajax_tcc_get_full_quote_data', 'tcc_get_full_quote_data' );
 
+// NEW ACTIONS FOR BACKUP & RESTORE
+add_action( 'wp_ajax_tcc_export_backup', 'tcc_export_backup' );
+add_action( 'wp_ajax_tcc_import_backup', 'tcc_import_backup' );
+
 function tcc_optimize_transport() {
     if ( ! is_user_logged_in() ) wp_die();
     global $wpdb;
@@ -271,22 +275,33 @@ function tcc_calculate_trip() {
     $gst_rate = $gst_pct / 100;
     $pt_rate = $pt_pct / 100;
     $pg_rate = $pg_pct / 100;
+    $M = 1 + $gst_rate;
 
     // STEP 1: Calculate the INITIAL Base Price (Before Discount)
     if ($manual_pp_override !== false) {
-        $initial_base_price = $manual_pp_override * $total_pax;
+        // SCENARIO 1: User typed an exact Per Person (Inc GST) price.
+        // We work completely backward from the final Grand Total.
+        $target_grand_total = $manual_pp_override * $total_pax;
+        $initial_base_price = $target_grand_total / $M;
     } else {
         if ($override_profit !== false) {
+            // SCENARIO 2: User typed an exact Net Profit.
+            // To guarantee they take home this EXACT amount, we cannot use the 50/50 split. 
+            // We must use the full 100% tax denominator to push all taxes to the client's base price.
             $target_net_profit = $override_profit; 
+            $denominator = 1 - ($M * $pt_rate) - ($M * $pg_rate);
         } else {
+            // SCENARIO 3: Default Profit Logic.
+            // Distribute the tax burden 50/50 between the user's profit and the client's price.
             $target_net_profit = $profit_per_person * $total_pax; 
+            
+            $client_pt_burden = $pt_rate * 0.50; 
+            $client_pg_burden = $pg_rate * 0.50;
+            
+            $denominator = 1 - ($M * $client_pt_burden) - ($M * $client_pg_burden);
         }
         
-        $M = 1 + $gst_rate;
-        $denominator = 1 - ($M * $pt_rate) - ($M * $pg_rate);
         if ($denominator <= 0) $denominator = 0.01; 
-        
-        // This is the base price required to hit target profit IF NO DISCOUNT is applied
         $initial_base_price = ($target_net_profit + $actual_cost) / $denominator;
     }
 
@@ -425,7 +440,6 @@ function tcc_calculate_trip() {
     ));
 }
 
-// ... Keep all other functions in tcc-ajax.php identical ...
 function tcc_rename_master_element() {
     if ( ! is_user_logged_in() ) wp_die();
     global $wpdb;
@@ -882,4 +896,141 @@ function tcc_update_quote_client() {
     ));
     
     wp_send_json_success();
+}
+
+// --- BACKUP AND RESTORE FUNCTIONS ---
+
+function tcc_export_backup() {
+    // Security check: Return a proper JSON error instead of a silent wp_die()
+    if ( ! is_user_logged_in() ) {
+        wp_send_json_error('You must be logged in to export backups.');
+        wp_die();
+    }
+    if ( ! current_user_can('manage_options') ) {
+        wp_send_json_error('You do not have administrator permissions to export backups.');
+        wp_die();
+    }
+    
+    global $wpdb;
+
+    $backup = array();
+
+    // 1. Export WP Options
+    $backup['options'] = array(
+        'tcc_global_settings'   => get_option('tcc_global_settings'),
+        'tcc_master_settings'   => get_option('tcc_master_settings'),
+        'tcc_itinerary_presets' => get_option('tcc_itinerary_presets'),
+    );
+
+    // 2. Export Custom Database Tables
+    $table_hotels = $wpdb->prefix . 'tcc_hotel_rates';
+    $table_trans  = $wpdb->prefix . 'tcc_transport_rates';
+    
+    $backup['tables'] = array(
+        'hotels'    => $wpdb->get_results("SELECT * FROM $table_hotels", ARRAY_A),
+        'transport' => $wpdb->get_results("SELECT * FROM $table_trans", ARRAY_A),
+    );
+
+    // 3. Export Quotes (Custom Post Type & Meta)
+    $quotes = get_posts(array(
+        'post_type'      => 'tcc_quote',
+        'posts_per_page' => -1,
+        'post_status'    => 'any'
+    ));
+    
+    $quotes_data = array();
+    foreach($quotes as $q) {
+        $quotes_data[] = array(
+            'post_title'   => $q->post_title,
+            'post_name'    => $q->post_name,
+            'post_content' => $q->post_content,
+            'post_status'  => $q->post_status,
+            'post_date'    => $q->post_date,
+            'meta'         => array(
+                'tcc_payments'      => get_post_meta($q->ID, 'tcc_payments', true),
+                'tcc_lead_status'   => get_post_meta($q->ID, 'tcc_lead_status', true),
+                'tcc_followup_date' => get_post_meta($q->ID, 'tcc_followup_date', true),
+                'tcc_is_priority'   => get_post_meta($q->ID, 'tcc_is_priority', true),
+            )
+        );
+    }
+    $backup['quotes'] = $quotes_data;
+
+    wp_send_json_success($backup);
+}
+
+function tcc_import_backup() {
+    // Security check: Return a proper JSON error instead of a silent wp_die()
+    if ( ! is_user_logged_in() ) {
+        wp_send_json_error('You must be logged in to import backups.');
+        wp_die();
+    }
+    if ( ! current_user_can('manage_options') ) {
+        wp_send_json_error('You do not have administrator permissions to import backups.');
+        wp_die();
+    }
+    
+    global $wpdb;
+
+    // Read the raw JSON payload
+    $json_data = file_get_contents('php://input');
+    $data = json_decode($json_data, true);
+
+    if(!$data || !isset($data['options'])) {
+        wp_send_json_error('Invalid backup file structure.');
+        wp_die();
+    }
+
+    // 1. Restore WP Options
+    if(isset($data['options']['tcc_global_settings'])) update_option('tcc_global_settings', $data['options']['tcc_global_settings']);
+    if(isset($data['options']['tcc_master_settings'])) update_option('tcc_master_settings', $data['options']['tcc_master_settings']);
+    if(isset($data['options']['tcc_itinerary_presets'])) update_option('tcc_itinerary_presets', $data['options']['tcc_itinerary_presets']);
+
+    // 2. Restore Custom Database Tables (Clear existing data first to prevent duplicate IDs)
+    $table_hotels = $wpdb->prefix . 'tcc_hotel_rates';
+    $table_trans  = $wpdb->prefix . 'tcc_transport_rates';
+    
+    $wpdb->query("TRUNCATE TABLE $table_hotels");
+    if(!empty($data['tables']['hotels'])) {
+        foreach($data['tables']['hotels'] as $row) {
+            unset($row['id']); // Let auto-increment assign a fresh ID
+            $wpdb->insert($table_hotels, $row);
+        }
+    }
+
+    $wpdb->query("TRUNCATE TABLE $table_trans");
+    if(!empty($data['tables']['transport'])) {
+        foreach($data['tables']['transport'] as $row) {
+            unset($row['id']);
+            $wpdb->insert($table_trans, $row);
+        }
+    }
+
+    // 3. Restore Quotes (Delete all existing quotes first to avoid duplicates)
+    $old_quotes = get_posts(array('post_type' => 'tcc_quote', 'posts_per_page' => -1, 'post_status' => 'any', 'fields' => 'ids'));
+    foreach($old_quotes as $qid) {
+        wp_delete_post($qid, true);
+    }
+
+    if(!empty($data['quotes'])) {
+        foreach($data['quotes'] as $q) {
+            $new_id = wp_insert_post(array(
+                'post_type'    => 'tcc_quote',
+                'post_title'   => $q['post_title'],
+                'post_name'    => $q['post_name'],
+                'post_content' => wp_slash($q['post_content']), // Must slash JSON payload for safe DB insertion
+                'post_status'  => $q['post_status'],
+                'post_date'    => $q['post_date']
+            ));
+
+            if(!is_wp_error($new_id)) {
+                if(isset($q['meta']['tcc_payments'])) update_post_meta($new_id, 'tcc_payments', $q['meta']['tcc_payments']);
+                if(isset($q['meta']['tcc_lead_status'])) update_post_meta($new_id, 'tcc_lead_status', $q['meta']['tcc_lead_status']);
+                if(isset($q['meta']['tcc_followup_date'])) update_post_meta($new_id, 'tcc_followup_date', $q['meta']['tcc_followup_date']);
+                if(isset($q['meta']['tcc_is_priority'])) update_post_meta($new_id, 'tcc_is_priority', $q['meta']['tcc_is_priority']);
+            }
+        }
+    }
+
+    wp_send_json_success('Backup restored successfully. Page will now refresh.');
 }

@@ -216,11 +216,11 @@ function tcc_render_calculator_form() {
 
                 <div class="tcc-grid-2">
                     <div class="tcc-form-group">
-                        <label>Adjust Profit (₹)</label>
+                        <label>Net Profit (₹)</label>
                         <input type="number" name="override_profit" id="calc_override_profit" placeholder="Target Net Profit" step="0.01">
                     </div>
                     <div class="tcc-form-group">
-                        <label>Override PP Base (₹)</label>
+                        <label>Override PP (Inc GST) (₹)</label>
                         <input type="number" name="manual_pp_override" id="calc_manual_pp_override" placeholder="Auto" step="0.01">
                     </div>
                 </div>
@@ -514,6 +514,26 @@ function tcc_render_settings_dashboard() {
 
                     <h4 style="margin:0 0 10px 0; font-size:14px; color:#334155;">Transaction History</h4>
                     <div id="pmt_history_table" style="background:#fff; border:1px solid #e2e8f0; border-radius:4px; overflow:hidden;">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tcc-accordion">
+            <div class="tcc-accordion-header" style="background:#f1f5f9; color:#334155; border-color:#cbd5e1;">6. Backup & Restore <span>&#9660;</span></div>
+            <div class="tcc-accordion-body" style="background:#fff;">
+                <div class="tcc-grid-2">
+                    <div style="border:1px solid #e2e8f0; padding:15px; border-radius:4px; text-align:center;">
+                        <h4 style="margin:0 0 10px; color:#0f172a;">Export Backup</h4>
+                        <p style="font-size:12px; color:#64748b; margin-bottom:15px;">Download a complete backup of all global settings, hotel/cab rates, presets, client details, and generated quotes.</p>
+                        <button type="button" id="tcc_export_btn" class="tcc-btn-primary" style="margin:0;">Download JSON Backup</button>
+                    </div>
+                    
+                    <div style="border:1px solid #fee2e2; background:#fef2f2; padding:15px; border-radius:4px; text-align:center;">
+                        <h4 style="margin:0 0 10px; color:#b91c1c;">Import Backup</h4>
+                        <p style="font-size:12px; color:#dc2626; margin-bottom:10px;"><strong>Warning:</strong> Restoring a backup will permanently overwrite and replace all current data!</p>
+                        <input type="file" id="tcc_import_file" accept=".json" style="margin-bottom:10px; font-size:12px; max-width: 100%;">
+                        <button type="button" id="tcc_import_btn" class="tcc-btn-del" style="margin:0; background:#dc2626; color:#fff;">Restore Data</button>
                     </div>
                 </div>
             </div>
