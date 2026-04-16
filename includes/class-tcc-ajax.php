@@ -104,8 +104,14 @@ function tcc_calculate_trip() {
     $total_days   = intval($_POST['total_days']);
     $no_of_rooms  = intval($_POST['no_of_rooms']);
     $extra_beds   = intval($_POST['extra_beds']);
+    
     $pickup_loc   = trim(sanitize_text_field($_POST['pickup_location']));
+    $pickup_custom= isset($_POST['pickup_custom']) ? trim(sanitize_text_field($_POST['pickup_custom'])) : '';
     $drop_loc     = isset($_POST['drop_location']) ? trim(sanitize_text_field($_POST['drop_location'])) : $pickup_loc;
+    $drop_custom  = isset($_POST['drop_custom']) ? trim(sanitize_text_field($_POST['drop_custom'])) : '';
+
+    $display_pickup = !empty($pickup_custom) ? "{$pickup_custom} ({$pickup_loc})" : $pickup_loc;
+    $display_drop   = !empty($drop_custom) ? "{$drop_custom} ({$drop_loc})" : $drop_loc;
     
     $hotel_cat    = trim(sanitize_text_field($_POST['hotel_category'])); 
     $start_date   = sanitize_text_field($_POST['start_date']);
@@ -322,8 +328,8 @@ function tcc_calculate_trip() {
         'extra_beds'  => $extra_beds,
         'transport_string' => $transport_summary_string,
         'corrected_trans_qtys' => $trans_qtys, 
-        'pickup'      => $pickup_loc,
-        'drop'        => $drop_loc,
+        'pickup'      => $display_pickup,
+        'drop'        => $display_drop,
         'hotel_cat'   => $hotel_cat,
         'stays'       => $detailed_stay_info,
         'inclusions'  => $dest_inclusions,
@@ -366,6 +372,9 @@ function tcc_calculate_trip() {
         'd1_val' => $d1_val,
         'd2_type' => $d2_type,
         'd2_val' => $d2_val,
+        'pickup_custom' => $pickup_custom,
+        'drop_custom' => $drop_custom,
+        'itinerary_stay_place' => isset($_POST['itinerary_stay_place']) ? $_POST['itinerary_stay_place'] : array(),
     );
 
     $is_final = isset($_POST['generate_link']) ? 1 : 0;
@@ -668,18 +677,20 @@ function tcc_save_itinerary_preset() {
     $destination = trim(sanitize_text_field($_POST['destination']));
     
     $raw_days = isset($_POST['itinerary_day']) ? $_POST['itinerary_day'] : array();
-    if(is_array($raw_days)) {
-         $days = array_map('sanitize_text_field', wp_unslash($raw_days));
-    } else {
-         $days = array();
-    }
+    $days = is_array($raw_days) ? array_map('sanitize_text_field', wp_unslash($raw_days)) : array();
+
+    $raw_stays = isset($_POST['itinerary_stay_place']) ? $_POST['itinerary_stay_place'] : array();
+    $stays = is_array($raw_stays) ? array_map('sanitize_text_field', wp_unslash($raw_stays)) : array();
 
     if(empty($preset_name) || empty($days)) { wp_send_json_error("Missing data"); wp_die(); }
 
     $presets = get_option('tcc_itinerary_presets', array());
     if(!isset($presets[$destination])) $presets[$destination] = array();
     
-    $presets[$destination][$preset_name] = $days;
+    $presets[$destination][$preset_name] = array(
+        'itinerary' => $days,
+        'stay_places' => $stays
+    );
     update_option('tcc_itinerary_presets', $presets);
     
     wp_send_json_success("Saved Successfully");

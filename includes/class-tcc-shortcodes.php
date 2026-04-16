@@ -133,11 +133,17 @@ function tcc_render_calculator_form() {
                 <div class="tcc-grid-2">
                     <div class="tcc-form-group">
                         <label>Pickup Location</label>
-                        <select name="pickup_location" id="calc_pickup" required></select>
+                        <div style="display:flex; gap:4px;">
+                            <select name="pickup_location" id="calc_pickup" required style="flex:1;"></select>
+                            <input type="text" name="pickup_custom" id="calc_pickup_custom" placeholder="Custom Name (Opt.)" style="flex:1;">
+                        </div>
                     </div>
                     <div class="tcc-form-group">
                         <label>Drop Location</label>
-                        <select name="drop_location" id="calc_drop" required></select>
+                        <div style="display:flex; gap:4px;">
+                            <select name="drop_location" id="calc_drop" required style="flex:1;"></select>
+                            <input type="text" name="drop_custom" id="calc_drop_custom" placeholder="Custom Name (Opt.)" style="flex:1;">
+                        </div>
                     </div>
                 </div>
                 <div id="transport-wrapper">

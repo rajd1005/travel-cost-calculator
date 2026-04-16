@@ -54,6 +54,7 @@ if(!$quote_data) {
 }
 
 $d = $quote_data['summary'];
+$raw_stays = isset($quote_data['raw']['itinerary_stay_place']) ? $quote_data['raw']['itinerary_stay_place'] : [];
 
 // ----------------------------------------------------------------------
 // PAYMENT & INVOICE LOGIC (With Refund Handling)
@@ -115,7 +116,13 @@ $txt_trip = "*Trip Details*\nStart Date: " . date('d M Y', strtotime($d['start_d
 $txt_itin = "*Itinerary Details*\n";
 if(!empty($d['itinerary'])){
     foreach($d['itinerary'] as $idx => $t){
-        if(trim($t)) $txt_itin .= "*Day ".($idx+1).":* " . trim($t) . "\n";
+        if(trim($t)) {
+            $stay_text = "";
+            if (!empty($raw_stays[$idx])) {
+                $stay_text = " n/s-" . trim($raw_stays[$idx]) . " ";
+            }
+            $txt_itin .= "*Day ".($idx+1).":* " . trim($t) . $stay_text . "\n";
+        }
     }
 } else {
     $txt_itin .= "No itinerary provided.\n";
@@ -320,10 +327,15 @@ if ($is_cancelled) {
             <div class="tcc-timeline">
                 <?php foreach($d['itinerary'] as $index => $day_text): 
                     if(trim($day_text) === '') continue;
+                    
+                    $stay_html = "";
+                    if (!empty($raw_stays[$index])) {
+                        $stay_html = " <strong style='color:var(--tcc-primary);'>n/s-" . esc_html(trim($raw_stays[$index])) . "</strong>";
+                    }
                 ?>
                     <div class="tcc-timeline-item">
                         <h4 class="tcc-timeline-title">Day <?php echo $index + 1; ?></h4>
-                        <p class="tcc-timeline-desc"><?php echo esc_html($day_text); ?></p>
+                        <p class="tcc-timeline-desc"><?php echo esc_html($day_text) . $stay_html; ?></p>
                     </div>
                 <?php endforeach; ?>
             </div>

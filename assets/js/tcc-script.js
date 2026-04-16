@@ -62,8 +62,6 @@ jQuery(document).ready(function($) {
         }
     }
 
-    $('#calc_destination').on('change', updateCalculatorDropdowns);
-
     function updateRowHotels($row) {
         let dest = $('#calc_destination').val();
         let cat = $row.find('.stay_cat_dropdown').val(); 
@@ -218,7 +216,10 @@ jQuery(document).ready(function($) {
         
         let row = `
         <div class="night-stay-row tcc-repeater-row tcc-fade-in" style="flex-wrap:wrap; gap:5px;">
-            <select name="stay_place[]" class="stay_place_dropdown" required style="flex:2;">${placeOptionsHtml}</select>
+            <select name="stay_place[]" class="stay_place_dropdown" required style="flex:2;">
+                <option value="">-- Select --</option>
+                ${placeOptionsHtml}
+            </select>
             <select name="stay_category[]" class="stay_cat_dropdown" required style="flex:1.5;">${catOptionsHtml}</select>
             <div style="flex:3;">
                 <select class="stay_hotel_dropdown" multiple required style="width:100%; height:55px !important; border:1px solid #ccc; border-radius:3px; padding:2px; font-size:12px; background:#fff; outline:none;"></select>
@@ -488,39 +489,110 @@ jQuery(document).ready(function($) {
         setTimeout(function(){ $btn.text(originalText); }, 2000);
     });
 
-    function renumberDays() {
-        $('#day-wise-wrapper .tcc-day-label').each(function(index) {
-            $(this).text('Day ' + (index + 1));
-        });
-    }
+    // --- DAY WISE LOGIC WITH AUTO STAY-SYNC --- //
+    
+    let tccSortableInstance = null;
 
     function initSortable() {
         let el = document.getElementById('day-wise-wrapper');
         if(el && typeof Sortable !== 'undefined') {
-            Sortable.create(el, { handle: '.drag-handle', animation: 150, ghostClass: 'tcc-sortable-ghost', onEnd: function () { renumberDays(); triggerLiveCalculation(); } });
+            if(tccSortableInstance) {
+                tccSortableInstance.destroy();
+            }
+            tccSortableInstance = Sortable.create(el, { 
+                handle: '.drag-handle', animation: 150, ghostClass: 'tcc-sortable-ghost', 
+                onEnd: function () { 
+                    // Automatically redraws so 'Trip Ends' forces itself back onto the bottom row.
+                    generateDayInputs(); 
+                    syncDayWiseToRouting(); 
+                    triggerLiveCalculation(); 
+                } 
+            });
         }
     }
+
+    function syncDayWiseToRouting() {
+        let stays = [];
+        $('#day-wise-wrapper .tcc-day-stay-place').each(function() {
+            stays.push($(this).val() || ''); 
+        });
+
+        if(stays.length === 0) return;
+
+        let grouped = [];
+        let currentStay = stays[0];
+        let count = 1;
+        for(let i = 1; i < stays.length; i++) {
+            if(stays[i] === currentStay) {
+                count++;
+            } else {
+                grouped.push({ place: currentStay, nights: count });
+                currentStay = stays[i];
+                count = 1;
+            }
+        }
+        grouped.push({ place: currentStay, nights: count });
+
+        $('#night-stay-wrapper').empty();
+        let defaultCat = $('#calc_hotel_cat').val();
+
+        grouped.forEach(g => { addStayRow(g.place, defaultCat, '', g.nights); });
+        triggerLiveCalculation();
+    }
+
+    $(document).on('change', '.tcc-day-stay-place', syncDayWiseToRouting);
 
     function generateDayInputs() {
         let days = parseInt($('#total_days').val()) || 0;
         let wrapper = $('#day-wise-wrapper');
         let currentValues = [];
-        wrapper.find('.tcc-day-input').each(function() { currentValues.push($(this).val()); });
+        let currentStays = [];
+        
+        wrapper.find('.tcc-day-row').each(function() { 
+            currentValues.push($(this).find('.tcc-day-input').val()); 
+            let sp = $(this).find('.tcc-day-stay-place').val();
+            currentStays.push(sp !== undefined ? sp : '');
+        });
         wrapper.empty();
+
+        let dest = $('#calc_destination').val();
+        let stayOptions = '<option value="">-- Night Stay --</option>';
+        if(typeof tccMasterData !== 'undefined' && tccMasterData[dest]) {
+            let stays = tccMasterData[dest].stay_places;
+            if(typeof stays === 'string') stays = stays.split(',').map(s=>s.trim());
+            if(Array.isArray(stays)) {
+                $.each(stays, function(i, val) { stayOptions += `<option value="${val}">${val}</option>`; });
+            }
+        }
+
         for(let i = 1; i <= days; i++) {
             let val = currentValues[i-1] ? currentValues[i-1] : '';
+            let spVal = currentStays[i-1] ? currentStays[i-1] : '';
+
+            let stayDropdownHtml = '';
+            if (i < days) {
+                stayDropdownHtml = `<select name="itinerary_stay_place[]" class="tcc-day-stay-place" style="flex:0.6; border-radius:0; margin-bottom:0; font-size:11px; padding:2px; border-left:none;">${stayOptions}</select>`;
+            } else {
+                stayDropdownHtml = `<input type="hidden" name="itinerary_stay_place[]" value=""><div style="flex:0.6; background:#f1f5f9; border:1px solid #ccc; border-left:none; display:flex; align-items:center; justify-content:center; font-size:10px; color:#94a3b8;">Trip Ends</div>`;
+            }
+
             let row = `
             <div class="tcc-day-row" style="display:flex; align-items:stretch; margin-bottom:5px; background:#fff; border-radius:3px;">
                 <div class="drag-handle" style="cursor:grab; padding:8px 10px; background:#f1f5f9; color:#94a3b8; border:1px solid #ccc; border-right:none; border-radius:3px 0 0 3px; display:flex; align-items:center;">&#9776;</div>
                 <div class="tcc-day-label" style="background:#e2e8f0; padding:8px 8px; font-size:11px; font-weight:bold; border:1px solid #ccc; border-right:none; border-left:none; width:55px; text-align:center; display:flex; align-items:center; justify-content:center;">Day ${i}</div>
-                <input type="text" name="itinerary_day[]" class="tcc-day-input" value="${val}" placeholder="E.g. Arrival at Srinagar & Transfer to Hotel" style="border-radius:0 3px 3px 0; margin-bottom:0; flex:1;" required>
+                <input type="text" name="itinerary_day[]" class="tcc-day-input" value="${val}" placeholder="E.g. Arrival at Srinagar" style="border-radius:0; margin-bottom:0; flex:1;" required>
+                ${stayDropdownHtml}
             </div>`;
-            wrapper.append(row);
+            
+            let $newRow = $(row);
+            if(i < days && spVal) $newRow.find('.tcc-day-stay-place').val(spVal);
+            wrapper.append($newRow);
         }
         if (typeof Sortable === 'undefined') { $.getScript('https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js', initSortable); } else { initSortable(); }
     }
 
     $('#total_days').on('input', generateDayInputs);
+    $('#calc_destination').on('change', function() { updateCalculatorDropdowns(); loadPresets(); generateDayInputs(); });
     setTimeout(generateDayInputs, 500);
 
     function loadPresets() {
@@ -529,17 +601,35 @@ jQuery(document).ready(function($) {
         $select.html('<option value="">-- Load Preset --</option>');
         $('#delete_itinerary_preset').hide();
         if(!dest) return;
+        
         $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_load_itinerary_presets', destination: dest }, function(res) {
-            if(res.success && Object.keys(res.data).length > 0) {
-                $select.data('presets', res.data);
-                $.each(res.data, function(presetName, daysArr) {
-                    $select.append(`<option value="${presetName}">${presetName} (${daysArr.length} Days)</option>`);
-                });
-            }
+            try {
+                if(res.success && res.data) {
+                    let pData = res.data;
+                    if(typeof pData === 'string') { pData = JSON.parse(pData); }
+                    
+                    if(Object.keys(pData).length > 0) {
+                        $select.data('presets', pData);
+                        $.each(pData, function(presetName, dataObj) {
+                            let daysLen = 0;
+                            if (Array.isArray(dataObj)) {
+                                daysLen = dataObj.length;
+                            } else if (dataObj && dataObj.itinerary !== undefined) {
+                                if(Array.isArray(dataObj.itinerary)) {
+                                    daysLen = dataObj.itinerary.length;
+                                } else if(typeof dataObj.itinerary === 'object' && dataObj.itinerary !== null) {
+                                    daysLen = Object.keys(dataObj.itinerary).length;
+                                }
+                            } else if (dataObj && typeof dataObj === 'object') {
+                                daysLen = Object.keys(dataObj).length;
+                            }
+                            $select.append(`<option value="${presetName}">${presetName} (${daysLen} Days)</option>`);
+                        });
+                    }
+                }
+            } catch(e) { console.error("Error loading presets: ", e); }
         });
     }
-    $('#calc_destination').on('change', loadPresets);
-    setTimeout(loadPresets, 500);
 
     $('#itinerary_preset_select').on('change', function() {
         let presetName = $(this).val();
@@ -552,13 +642,46 @@ jQuery(document).ready(function($) {
         $('#delete_itinerary_preset').show();
         $('#new_preset_name').val(presetName);
         $('#save_itinerary_preset').text('Update Preset');
+        
         let presets = $(this).data('presets');
         if(presets && presets[presetName]) {
-            let daysArr = presets[presetName];
+            let presetData = presets[presetName];
+            
+            let daysArr = [];
+            let staysArr = [];
+
+            if (Array.isArray(presetData)) {
+                daysArr = presetData;
+            } else if (presetData && presetData.itinerary !== undefined) {
+                if(Array.isArray(presetData.itinerary)) {
+                    daysArr = presetData.itinerary;
+                } else if(typeof presetData.itinerary === 'object' && presetData.itinerary !== null) {
+                    daysArr = Object.values(presetData.itinerary);
+                }
+
+                if(presetData.stay_places) {
+                    if(Array.isArray(presetData.stay_places)) {
+                        staysArr = presetData.stay_places;
+                    } else if(typeof presetData.stay_places === 'object' && presetData.stay_places !== null) {
+                        staysArr = Object.values(presetData.stay_places);
+                    }
+                }
+            } else if (presetData && typeof presetData === 'object') {
+                daysArr = Object.values(presetData);
+            }
+
             $('#total_days').val(daysArr.length).trigger('input'); 
             setTimeout(function() {
-                $('#day-wise-wrapper .tcc-day-input').each(function(index) { if(daysArr[index]) $(this).val(daysArr[index]); });
-                triggerLiveCalculation();
+                $('#day-wise-wrapper .tcc-day-row').each(function(index) { 
+                    if(daysArr[index]) $(this).find('.tcc-day-input').val(daysArr[index]); 
+                    if(staysArr && staysArr[index]) {
+                        $(this).find('.tcc-day-stay-place').val(staysArr[index]);
+                    } else {
+                        $(this).find('.tcc-day-stay-place').val('');
+                    }
+                });
+                
+                syncDayWiseToRouting();
             }, 100);
         }
     });
@@ -699,8 +822,12 @@ jQuery(document).ready(function($) {
                     $('#total_days').val(d.days);
                     $('#no_of_rooms').val(d.rooms);
                     $('#extra_beds').val(d.extra_beds);
+                    
                     $('#calc_pickup').val(d.pickup);
+                    $('#calc_pickup_custom').val(r.pickup_custom || '');
+                    $('#calc_drop_custom').val(r.drop_custom || '');
                     $('#calc_drop').val(d.drop || d.pickup);
+                    
                     $('#calc_hotel_cat').val(d.hotel_cat).trigger('change');
                     
                     $('#transport-wrapper').empty();
@@ -721,8 +848,11 @@ jQuery(document).ready(function($) {
                     if(d.itinerary) {
                         $('#total_days').trigger('input');
                         setTimeout(() => {
-                            $('#day-wise-wrapper .tcc-day-input').each(function(i) {
-                                if(d.itinerary[i]) $(this).val(d.itinerary[i]);
+                            $('#day-wise-wrapper .tcc-day-row').each(function(i) {
+                                if(d.itinerary[i]) $(this).find('.tcc-day-input').val(d.itinerary[i]);
+                                if(r.itinerary_stay_place && r.itinerary_stay_place[i]) {
+                                    $(this).find('.tcc-day-stay-place').val(r.itinerary_stay_place[i]);
+                                }
                             });
                         }, 500);
                     }
@@ -1276,6 +1406,8 @@ jQuery(document).ready(function($) {
         fetchHotelNamesList(); 
         fetchTransportPricing(); 
         
+        loadPresets(); 
+
         if($('#night-stay-wrapper').children().length === 0) {
             addStayRow();
         }
