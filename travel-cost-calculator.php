@@ -1,8 +1,8 @@
 <?php
 /*
 Plugin Name: Travel Cost Calculator
-Description: Complete V3.3 - Smart Auto-Calc, Indian Currency, Persistent Links, and Inclusions/Exclusions.
-Version: 3.3
+Description: Complete V3.4 - Smart Auto-Calc, Indian Currency, Persistent Links, Inclusions/Exclusions, Booking Manager, and Lead Follow-up Dashboard.
+Version: 3.4
 Author: Your Agency
 */
 
@@ -11,8 +11,8 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 // Enqueue Styles & Scripts with AJAX
 add_action( 'wp_enqueue_scripts', 'tcc_enqueue_scripts' );
 function tcc_enqueue_scripts() {
-    wp_enqueue_style( 'tcc-style', plugin_dir_url( __FILE__ ) . 'assets/css/tcc-style.css', array(), '3.3' );
-    wp_enqueue_script( 'tcc-script', plugin_dir_url( __FILE__ ) . 'assets/js/tcc-script.js', array('jquery'), '3.3', true );
+    wp_enqueue_style( 'tcc-style', plugin_dir_url( __FILE__ ) . 'assets/css/tcc-style.css', array(), '3.4' );
+    wp_enqueue_script( 'tcc-script', plugin_dir_url( __FILE__ ) . 'assets/js/tcc-script.js', array('jquery'), '3.4', true );
     
     wp_localize_script( 'tcc-script', 'tcc_ajax_obj', array(
         'ajax_url' => admin_url( 'admin-ajax.php' )
@@ -22,6 +22,7 @@ function tcc_enqueue_scripts() {
 // Include required files
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-tcc-shortcodes.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-tcc-ajax.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-tcc-followup.php'; // NEW: Follow-up Dashboard Module
 
 // REGISTER CUSTOM POST TYPE FOR QUOTES
 add_action( 'init', 'tcc_register_quote_cpt' );
