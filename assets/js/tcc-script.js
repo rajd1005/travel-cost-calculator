@@ -138,6 +138,11 @@ jQuery(document).ready(function($) {
             let dest = $('#calc_destination').val();
             let pickup = $('#calc_pickup').val();
             let pax = parseInt($('#total_pax').val()) || 0;
+            
+            if (!pickup && typeof tccMasterData !== 'undefined' && tccMasterData[dest] && tccMasterData[dest].pickups && tccMasterData[dest].pickups.length > 0) {
+                pickup = tccMasterData[dest].pickups[0];
+            }
+
             if(!dest || !pickup || pax <= 0) return;
 
             $.post(tcc_ajax_obj.ajax_url, {
@@ -151,7 +156,7 @@ jQuery(document).ready(function($) {
                     triggerLiveCalculation();
                 }
             });
-        }, 400); 
+        }, 50); 
     }
 
     function addTransportRow(vehicleName = '', qty = 1) {
@@ -502,7 +507,6 @@ jQuery(document).ready(function($) {
             tccSortableInstance = Sortable.create(el, { 
                 handle: '.drag-handle', animation: 150, ghostClass: 'tcc-sortable-ghost', 
                 onEnd: function () { 
-                    // Automatically redraws so 'Trip Ends' forces itself back onto the bottom row.
                     generateDayInputs(); 
                     syncDayWiseToRouting(); 
                     triggerLiveCalculation(); 
@@ -592,7 +596,14 @@ jQuery(document).ready(function($) {
     }
 
     $('#total_days').on('input', generateDayInputs);
-    $('#calc_destination').on('change', function() { updateCalculatorDropdowns(); loadPresets(); generateDayInputs(); });
+    
+    $('#calc_destination').on('change', function() { 
+        updateCalculatorDropdowns(); 
+        loadPresets(); 
+        generateDayInputs(); 
+        triggerAutoTransportOptimization(); 
+    });
+    
     setTimeout(generateDayInputs, 500);
 
     function loadPresets() {
@@ -710,23 +721,6 @@ jQuery(document).ready(function($) {
                 $('#preset_msg').text('Error saving').css('color', 'red').fadeIn().delay(3000).fadeOut();
             }
         });
-    });
-
-    $('#delete_itinerary_preset').on('click', function() {
-        let dest = $('#calc_destination').val();
-        let presetName = $('#itinerary_preset_select').val();
-        if(!presetName) return;
-        if(confirm('Are you sure you want to permanently delete the "' + presetName + '" preset?')) {
-            $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_delete_itinerary_preset', destination: dest, preset_name: presetName }, function(res) {
-                if(res.success) {
-                    $('#new_preset_name').val('');
-                    $('#save_itinerary_preset').text('Save as Preset');
-                    $('#delete_itinerary_preset').hide();
-                    $('#preset_msg').text('Deleted!').css('color', '#dc2626').fadeIn().delay(2000).fadeOut();
-                    loadPresets();
-                }
-            });
-        }
     });
 
     // --- BOOKING & PAYMENTS MANAGER LOGIC ---
@@ -892,6 +886,8 @@ jQuery(document).ready(function($) {
         
         let quoteData = window.tccAllQuotes.find(q => q.id == qid);
         
+        $('#pmt_email_quote_btn').show();
+        
         if(!quoteData.c_name || !quoteData.c_phone) {
             $('#tcc-add-payment-wrapper').hide();
             $('#pmt_missing_client_msg').show();
@@ -930,6 +926,60 @@ jQuery(document).ready(function($) {
             setTimeout(function(){ $btn.text(originalText); }, 2000);
         }
     });
+
+    // EMAIL PROMPT LOGIC FOR SETTINGS DASHBOARD
+    $('#pmt_email_quote_btn').on('click', function() {
+        let qid = $('#pmt_quote_select').val();
+        if(!qid) return;
+        
+        let quoteData = window.tccAllQuotes.find(q => q.id == qid);
+        let $btn = $(this);
+        let originalText = $btn.text();
+        
+        if (!quoteData.c_email || quoteData.c_email.trim() === '') {
+            let newEmail = prompt("⚠️ Client email is missing.\n\nPlease enter the client's email address to instantly save it and send the quotation:");
+            if (!newEmail || newEmail.trim() === '') {
+                return; 
+            }
+            
+            $btn.text('Saving...').prop('disabled', true);
+            
+            $.post(tcc_ajax_obj.ajax_url, {
+                action: 'tcc_update_quote_client',
+                quote_id: qid,
+                c_name: quoteData.c_name || '',
+                c_phone: quoteData.c_phone || '',
+                c_email: newEmail.trim()
+            }, function(res) {
+                if(res.success) {
+                    quoteData.c_email = newEmail.trim(); 
+                    sendEmailAJAX(qid, $btn, originalText); 
+                } else {
+                    $btn.text(originalText).prop('disabled', false);
+                    alert("Failed to save the new email address.");
+                }
+            });
+        } else {
+            if(confirm('Send quotation email to ' + quoteData.c_email + ' (BCC sent to Admin)?')) {
+                sendEmailAJAX(qid, $btn, originalText);
+            }
+        }
+    });
+
+    function sendEmailAJAX(quoteId, $btn, originalText) {
+        $btn.text('Sending...').prop('disabled', true);
+        $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_send_quote_email', quote_id: quoteId }, function(res) {
+            $btn.text(originalText).prop('disabled', false);
+            if(res.success) {
+                alert(res.data);
+            } else {
+                alert("Error: " + res.data);
+            }
+        }).fail(function() {
+            $btn.text(originalText).prop('disabled', false);
+            alert("Server error occurred while sending email.");
+        });
+    }
 
     $('#pmt_edit_quote_btn').on('click', function() {
         let qid = $('#pmt_quote_select').val();
@@ -1447,7 +1497,7 @@ jQuery(document).ready(function($) {
 
     // --- BACKUP & RESTORE LOGIC ---
     
-$('#tcc_export_btn').on('click', function() {
+    $('#tcc_export_btn').on('click', function() {
         let btn = $(this);
         let originalText = btn.text();
         btn.text('Exporting...').prop('disabled', true);
@@ -1530,6 +1580,155 @@ $('#tcc_export_btn').on('click', function() {
             });
         };
         reader.readAsText(file);
+    });
+
+    // --- QUICK NOTES LOGIC ---
+    $('#tcc-notes-toggle, #tcc-notes-close').on('click', function() {
+        let $modal = $('#tcc-notes-modal');
+        if($modal.is(':visible')) {
+            $modal.fadeOut(200);
+        } else {
+            $modal.css('display', 'flex').hide().fadeIn(200);
+            loadNotes();
+        }
+    });
+
+    $('#tcc-notes-modal').on('click', function(e) {
+        if(e.target === this) {
+            $(this).fadeOut(200);
+        }
+    });
+
+    $('#tcc-notes-filter').on('change', function() {
+        // Trigger a re-render from the globally stored notes when the filter changes
+        if(window.tccGlobalNotes) {
+            renderNotes(window.tccGlobalNotes);
+        }
+    });
+
+    function loadNotes() {
+        $('#tcc-notes-list').html('<div style="text-align:center; color:#64748b;">Loading notes...</div>');
+        $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_load_notes' }, function(res) {
+            if(res.success) {
+                window.tccGlobalNotes = res.data; // Cache globally for quick filtering
+                renderNotes(res.data);
+            }
+        });
+    }
+
+    function renderNotes(notes) {
+        let filterGroup = $('#tcc-notes-filter').val() || 'All';
+        let html = '';
+        let groups = new Set();
+        
+        if(!notes || notes.length === 0) {
+            html = '<div style="text-align:center; color:#94a3b8; font-size:13px; padding:20px;">No notes saved yet. Type below to add one!</div>';
+        } else {
+            $.each(notes, function(i, note) {
+                let grp = note.group || 'General';
+                groups.add(grp);
+                
+                if(filterGroup !== 'All' && filterGroup !== grp) return;
+
+                let escapedText = $('<div>').text(note.text).html().replace(/\n/g, '<br>');
+                html += `
+                <div style="background:#fff; border:1px solid #e2e8f0; border-radius:4px; padding:12px; margin-bottom:12px; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                        <span style="background:#e2e8f0; color:#334155; padding:2px 6px; border-radius:3px; font-size:10px; font-weight:bold; text-transform:uppercase;">${grp}</span>
+                    </div>
+                    <div style="font-size:13px; color:#334155; margin-bottom:12px; line-height:1.5;">${escapedText}</div>
+                    <div style="display:flex; gap:6px; justify-content:flex-end;">
+                        <button type="button" class="tcc-copy-note tcc-btn-secondary" data-text="${encodeURIComponent(note.text)}" style="margin:0; padding:4px 10px; font-size:10px; background:#e0e7ff; color:#2563eb; border-color:#bfdbfe;">📋 Copy</button>
+                        <button type="button" class="tcc-edit-note tcc-btn-secondary" data-id="${note.id}" data-text="${encodeURIComponent(note.text)}" data-group="${encodeURIComponent(grp)}" style="margin:0; padding:4px 10px; font-size:10px;">✏️ Edit</button>
+                        <button type="button" class="tcc-delete-note tcc-btn-del" data-id="${note.id}" style="margin:0; padding:4px 10px; font-size:10px; background:#fee2e2; color:#dc2626; border-color:#fecaca;">🗑️ Del</button>
+                    </div>
+                </div>`;
+            });
+            if(html === '') html = '<div style="text-align:center; color:#94a3b8; font-size:13px; padding:20px;">No notes found in this group.</div>';
+        }
+        $('#tcc-notes-list').html(html);
+
+        // Update Filters & Datalist dynamically based on the available groups
+        let currentFilter = $('#tcc-notes-filter').val();
+        let filterOptions = '<option value="All">All Groups</option>';
+        let datalistOptions = '';
+        
+        let sortedGroups = Array.from(groups).sort();
+        sortedGroups.forEach(g => {
+            let sel = (currentFilter === g) ? 'selected' : '';
+            filterOptions += `<option value="${g}" ${sel}>${g}</option>`;
+            datalistOptions += `<option value="${g}">`;
+        });
+        
+        $('#tcc-notes-filter').html(filterOptions);
+        $('#tcc-note-groups-list').html(datalistOptions);
+    }
+
+    $('#tcc-save-note-btn').on('click', function() {
+        let text = $('#tcc-new-note-text').val();
+        let group = $('#tcc-new-note-group').val() || 'General';
+        let id = $('#tcc-edit-note-id').val();
+        let btn = $(this);
+        if(!text.trim()) return;
+
+        btn.text('Saving...').prop('disabled', true);
+        $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_save_note', note_text: text, note_group: group, note_id: id }, function(res) {
+            btn.text('Save Note').prop('disabled', false);
+            if(res.success) {
+                $('#tcc-new-note-text').val('');
+                $('#tcc-edit-note-id').val('');
+                $('#tcc-cancel-edit-note').hide();
+                window.tccGlobalNotes = res.data; // Update cache
+                renderNotes(res.data);
+            }
+        });
+    });
+
+    $(document).on('click', '.tcc-edit-note', function() {
+        let text = decodeURIComponent($(this).data('text'));
+        let group = decodeURIComponent($(this).data('group'));
+        let id = $(this).data('id');
+        
+        $('#tcc-new-note-text').val(text);
+        $('#tcc-new-note-group').val(group);
+        $('#tcc-edit-note-id').val(id);
+        
+        $('#tcc-cancel-edit-note').show();
+        $('#tcc-save-note-btn').text('Update Note');
+    });
+
+    $('#tcc-cancel-edit-note').on('click', function() {
+        $('#tcc-new-note-text').val('');
+        $('#tcc-new-note-group').val('General');
+        $('#tcc-edit-note-id').val('');
+        $(this).hide();
+        $('#tcc-save-note-btn').text('Save Note');
+    });
+
+    $(document).on('click', '.tcc-delete-note', function() {
+        if(!confirm('Are you sure you want to delete this note?')) return;
+        let id = $(this).data('id');
+        $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_delete_note', note_id: id }, function(res) {
+            if(res.success) {
+                window.tccGlobalNotes = res.data; // Update cache
+                renderNotes(res.data);
+            }
+        });
+    });
+
+    $(document).on('click', '.tcc-copy-note', function() {
+        let text = decodeURIComponent($(this).data('text'));
+        let textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        
+        let btn = $(this);
+        let origText = btn.text();
+        btn.text('Copied!');
+        setTimeout(() => btn.text(origText), 1500);
     });
 
 });

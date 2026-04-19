@@ -39,9 +39,18 @@ add_action( 'wp_ajax_tcc_delete_quote', 'tcc_delete_quote' );
 add_action( 'wp_ajax_tcc_update_quote_client', 'tcc_update_quote_client' );
 add_action( 'wp_ajax_tcc_get_full_quote_data', 'tcc_get_full_quote_data' );
 
-// NEW ACTIONS FOR BACKUP & RESTORE
+// BACKUP & RESTORE
 add_action( 'wp_ajax_tcc_export_backup', 'tcc_export_backup' );
 add_action( 'wp_ajax_tcc_import_backup', 'tcc_import_backup' );
+
+// EMAIL ACTION
+add_action( 'wp_ajax_tcc_send_quote_email', 'tcc_send_quote_email' );
+
+// QUICK NOTES ACTIONS
+add_action( 'wp_ajax_tcc_load_notes', 'tcc_load_notes' );
+add_action( 'wp_ajax_tcc_save_note', 'tcc_save_note' );
+add_action( 'wp_ajax_tcc_delete_note', 'tcc_delete_note' );
+
 
 function tcc_optimize_transport() {
     if ( ! is_user_logged_in() ) wp_die();
@@ -57,24 +66,63 @@ function tcc_optimize_transport() {
 
     if (!$vehicles || count($vehicles) == 0) { wp_send_json_error(); wp_die(); }
 
-    $dp = array_fill(0, $pax + 1, INF);
-    $choice = array_fill(0, $pax + 1, null);
-    $dp[0] = 0;
+    // Find max capacity for array bounds
+    $max_cap = 0;
+    foreach($vehicles as $v) {
+        $cap = max(1, intval($v->capacity));
+        if($cap > $max_cap) $max_cap = $cap;
+    }
 
-    for ($i = 1; $i <= $pax; $i++) {
+    $target = $pax + $max_cap;
+    $cars = array_fill(0, $target + 1, INF);
+    $cost = array_fill(0, $target + 1, INF);
+    $choice = array_fill(0, $target + 1, null);
+    
+    $cars[0] = 0;
+    $cost[0] = 0;
+
+    // Advanced DP Algorithm: Priority 1: Fewest Cars. Priority 2: Lowest Cost (for exact same capacity).
+    for ($i = 0; $i <= $target; $i++) {
+        if ($cars[$i] === INF) continue;
+        
         foreach($vehicles as $v) {
             $cap = max(1, intval($v->capacity));
             $price = floatval($v->price_per_day);
-            $prev_pax = max(0, $i - $cap); 
-            if ($dp[$prev_pax] + $price < $dp[$i]) {
-                $dp[$i] = $dp[$prev_pax] + $price;
-                $choice[$i] = array('prev' => $prev_pax, 'vehicle' => $v->vehicle_type);
+            
+            $next = $i + $cap;
+            if ($next > $target) continue;
+
+            $new_cars = $cars[$i] + 1;
+            $new_cost = $cost[$i] + $price;
+
+            // Only update if it uses fewer cars, OR uses same cars but is cheaper
+            if ($new_cars < $cars[$next] || ($new_cars == $cars[$next] && $new_cost < $cost[$next])) {
+                $cars[$next] = $new_cars;
+                $cost[$next] = $new_cost;
+                $choice[$next] = array('prev' => $i, 'vehicle' => $v->vehicle_type);
             }
         }
     }
 
+    $min_cars = INF;
+    $best_idx = $pax;
+    
+    // Find the closest capacity >= pax that uses the fewest possible cars
+    for ($i = $pax; $i <= $target; $i++) {
+        if ($cars[$i] === INF) continue;
+        
+        if ($cars[$i] < $min_cars) {
+            $min_cars = $cars[$i];
+            $best_idx = $i;
+        }
+        // By NOT using <=, we naturally prioritize the smaller capacity index (closer to exactly the pax count).
+        // This guarantees that for 5 pax, a 7-seater is selected over an 8-seater combination, etc.
+    }
+
+    if ($min_cars === INF) { wp_send_json_error(); wp_die(); }
+
     $mix = [];
-    $curr = $pax;
+    $curr = $best_idx;
     while ($curr > 0 && isset($choice[$curr])) {
         $v_name = $choice[$curr]['vehicle'];
         if (!isset($mix[$v_name])) $mix[$v_name] = 0;
@@ -83,7 +131,10 @@ function tcc_optimize_transport() {
     }
 
     $result = [];
-    foreach($mix as $v_name => $qty) { $result[] = array('vehicle' => $v_name, 'qty' => $qty); }
+    foreach($mix as $v_name => $qty) { 
+        $result[] = array('vehicle' => $v_name, 'qty' => $qty); 
+    }
+    
     wp_send_json_success($result);
 }
 
@@ -279,25 +330,16 @@ function tcc_calculate_trip() {
 
     // STEP 1: Calculate the INITIAL Base Price (Before Discount)
     if ($manual_pp_override !== false) {
-        // SCENARIO 1: User typed an exact Per Person (Inc GST) price.
-        // We work completely backward from the final Grand Total.
         $target_grand_total = $manual_pp_override * $total_pax;
         $initial_base_price = $target_grand_total / $M;
     } else {
         if ($override_profit !== false) {
-            // SCENARIO 2: User typed an exact Net Profit.
-            // To guarantee they take home this EXACT amount, we cannot use the 50/50 split. 
-            // We must use the full 100% tax denominator to push all taxes to the client's base price.
             $target_net_profit = $override_profit; 
             $denominator = 1 - ($M * $pt_rate) - ($M * $pg_rate);
         } else {
-            // SCENARIO 3: Default Profit Logic.
-            // Distribute the tax burden 50/50 between the user's profit and the client's price.
             $target_net_profit = $profit_per_person * $total_pax; 
-            
             $client_pt_burden = $pt_rate * 0.50; 
             $client_pg_burden = $pg_rate * 0.50;
-            
             $denominator = 1 - ($M * $client_pt_burden) - ($M * $client_pg_burden);
         }
         
@@ -898,31 +940,19 @@ function tcc_update_quote_client() {
     wp_send_json_success();
 }
 
-// --- BACKUP AND RESTORE FUNCTIONS ---
-
 function tcc_export_backup() {
-    // Security check: Return a proper JSON error instead of a silent wp_die()
-    if ( ! is_user_logged_in() ) {
-        wp_send_json_error('You must be logged in to export backups.');
-        wp_die();
-    }
-    if ( ! current_user_can('manage_options') ) {
-        wp_send_json_error('You do not have administrator permissions to export backups.');
-        wp_die();
-    }
+    if ( ! is_user_logged_in() ) { wp_send_json_error('You must be logged in to export backups.'); wp_die(); }
+    if ( ! current_user_can('manage_options') ) { wp_send_json_error('You do not have administrator permissions to export backups.'); wp_die(); }
     
     global $wpdb;
-
     $backup = array();
 
-    // 1. Export WP Options
     $backup['options'] = array(
         'tcc_global_settings'   => get_option('tcc_global_settings'),
         'tcc_master_settings'   => get_option('tcc_master_settings'),
         'tcc_itinerary_presets' => get_option('tcc_itinerary_presets'),
     );
 
-    // 2. Export Custom Database Tables
     $table_hotels = $wpdb->prefix . 'tcc_hotel_rates';
     $table_trans  = $wpdb->prefix . 'tcc_transport_rates';
     
@@ -931,12 +961,7 @@ function tcc_export_backup() {
         'transport' => $wpdb->get_results("SELECT * FROM $table_trans", ARRAY_A),
     );
 
-    // 3. Export Quotes (Custom Post Type & Meta)
-    $quotes = get_posts(array(
-        'post_type'      => 'tcc_quote',
-        'posts_per_page' => -1,
-        'post_status'    => 'any'
-    ));
+    $quotes = get_posts(array('post_type' => 'tcc_quote', 'posts_per_page' => -1, 'post_status' => 'any'));
     
     $quotes_data = array();
     foreach($quotes as $q) {
@@ -955,62 +980,38 @@ function tcc_export_backup() {
         );
     }
     $backup['quotes'] = $quotes_data;
-
     wp_send_json_success($backup);
 }
 
 function tcc_import_backup() {
-    // Security check: Return a proper JSON error instead of a silent wp_die()
-    if ( ! is_user_logged_in() ) {
-        wp_send_json_error('You must be logged in to import backups.');
-        wp_die();
-    }
-    if ( ! current_user_can('manage_options') ) {
-        wp_send_json_error('You do not have administrator permissions to import backups.');
-        wp_die();
-    }
+    if ( ! is_user_logged_in() ) { wp_send_json_error('You must be logged in to import backups.'); wp_die(); }
+    if ( ! current_user_can('manage_options') ) { wp_send_json_error('You do not have administrator permissions to import backups.'); wp_die(); }
     
     global $wpdb;
-
-    // Read the raw JSON payload
     $json_data = file_get_contents('php://input');
     $data = json_decode($json_data, true);
 
-    if(!$data || !isset($data['options'])) {
-        wp_send_json_error('Invalid backup file structure.');
-        wp_die();
-    }
+    if(!$data || !isset($data['options'])) { wp_send_json_error('Invalid backup file structure.'); wp_die(); }
 
-    // 1. Restore WP Options
     if(isset($data['options']['tcc_global_settings'])) update_option('tcc_global_settings', $data['options']['tcc_global_settings']);
     if(isset($data['options']['tcc_master_settings'])) update_option('tcc_master_settings', $data['options']['tcc_master_settings']);
     if(isset($data['options']['tcc_itinerary_presets'])) update_option('tcc_itinerary_presets', $data['options']['tcc_itinerary_presets']);
 
-    // 2. Restore Custom Database Tables (Clear existing data first to prevent duplicate IDs)
     $table_hotels = $wpdb->prefix . 'tcc_hotel_rates';
     $table_trans  = $wpdb->prefix . 'tcc_transport_rates';
     
     $wpdb->query("TRUNCATE TABLE $table_hotels");
     if(!empty($data['tables']['hotels'])) {
-        foreach($data['tables']['hotels'] as $row) {
-            unset($row['id']); // Let auto-increment assign a fresh ID
-            $wpdb->insert($table_hotels, $row);
-        }
+        foreach($data['tables']['hotels'] as $row) { unset($row['id']); $wpdb->insert($table_hotels, $row); }
     }
 
     $wpdb->query("TRUNCATE TABLE $table_trans");
     if(!empty($data['tables']['transport'])) {
-        foreach($data['tables']['transport'] as $row) {
-            unset($row['id']);
-            $wpdb->insert($table_trans, $row);
-        }
+        foreach($data['tables']['transport'] as $row) { unset($row['id']); $wpdb->insert($table_trans, $row); }
     }
 
-    // 3. Restore Quotes (Delete all existing quotes first to avoid duplicates)
     $old_quotes = get_posts(array('post_type' => 'tcc_quote', 'posts_per_page' => -1, 'post_status' => 'any', 'fields' => 'ids'));
-    foreach($old_quotes as $qid) {
-        wp_delete_post($qid, true);
-    }
+    foreach($old_quotes as $qid) { wp_delete_post($qid, true); }
 
     if(!empty($data['quotes'])) {
         foreach($data['quotes'] as $q) {
@@ -1018,7 +1019,7 @@ function tcc_import_backup() {
                 'post_type'    => 'tcc_quote',
                 'post_title'   => $q['post_title'],
                 'post_name'    => $q['post_name'],
-                'post_content' => wp_slash($q['post_content']), // Must slash JSON payload for safe DB insertion
+                'post_content' => wp_slash($q['post_content']),
                 'post_status'  => $q['post_status'],
                 'post_date'    => $q['post_date']
             ));
@@ -1031,6 +1032,99 @@ function tcc_import_backup() {
             }
         }
     }
-
     wp_send_json_success('Backup restored successfully. Page will now refresh.');
+}
+
+function tcc_send_quote_email() {
+    if ( ! is_user_logged_in() ) wp_die();
+    $quote_id = intval($_POST['quote_id']);
+    if(!$quote_id) wp_send_json_error('Invalid Quote ID');
+
+    $post = get_post($quote_id);
+    if(!$post) wp_send_json_error('Quote not found');
+
+    $data = json_decode($post->post_content, true);
+    $client_email = isset($data['summary']['client_email']) ? sanitize_email($data['summary']['client_email']) : '';
+    $client_name = isset($data['summary']['client_name']) ? sanitize_text_field($data['summary']['client_name']) : 'Valued Client';
+    $dest = isset($data['summary']['destination']) ? sanitize_text_field($data['summary']['destination']) : 'Trip';
+
+    if(empty($client_email)) wp_send_json_error('No email address provided for this client.');
+
+    $permalink = get_permalink($quote_id);
+    $admin_email = get_option('admin_email');
+    $site_name = get_bloginfo('name');
+
+    $subject = "Your Travel Quotation / Receipt for $dest - $site_name";
+    
+    $message = "<html><body style='font-family: Arial, sans-serif; color: #333; line-height: 1.6;'>";
+    $message .= "<h3 style='color: #111;'>Hello $client_name,</h3>";
+    $message .= "<p>Thank you for choosing <strong>$site_name</strong>. Please find your detailed travel quotation, itinerary, and receipt information for <strong>$dest</strong> at the secure link below:</p>";
+    $message .= "<p style='margin: 25px 0;'><a href='$permalink' style='display: inline-block; padding: 12px 25px; background: #b93b59; color: #ffffff; text-decoration: none; border-radius: 5px; font-weight: bold;'>View Your Quotation</a></p>";
+    $message .= "<p>Or copy and paste this link securely into your browser: <br> <a href='$permalink'>$permalink</a></p>";
+    $message .= "<p>If you have any questions, please reply directly to this email or contact us.</p>";
+    $message .= "<p>Thank you,<br><strong>$site_name</strong></p>";
+    $message .= "</body></html>";
+
+    $headers = array('Content-Type: text/html; charset=UTF-8');
+    $headers[] = 'Bcc: ' . $admin_email; // Add Site Admin to BCC
+
+    $sent = wp_mail($client_email, $subject, $message, $headers);
+
+    if($sent) {
+        wp_send_json_success("Email successfully sent to $client_email (and BCC'd to Admin).");
+    } else {
+        wp_send_json_error('Failed to send email. Please check your WordPress email server configuration.');
+    }
+}
+
+// --- QUICK NOTES ENDPOINTS ---
+function tcc_load_notes() {
+    if ( ! is_user_logged_in() ) wp_die();
+    $notes = get_option('tcc_saved_notes', array());
+    wp_send_json_success($notes);
+}
+
+function tcc_save_note() {
+    if ( ! is_user_logged_in() ) wp_die();
+    $note_text = trim(sanitize_textarea_field(wp_unslash($_POST['note_text'])));
+    $note_group = isset($_POST['note_group']) ? trim(sanitize_text_field($_POST['note_group'])) : 'General';
+    if(empty($note_group)) $note_group = 'General';
+    
+    $note_id = isset($_POST['note_id']) ? sanitize_text_field($_POST['note_id']) : '';
+    if(empty($note_text)) wp_send_json_error('Empty note');
+
+    $notes = get_option('tcc_saved_notes', array());
+    
+    if($note_id) {
+        foreach($notes as &$n) {
+            if($n['id'] === $note_id) { 
+                $n['text'] = $note_text; 
+                $n['group'] = $note_group; 
+                break; 
+            }
+        }
+    } else {
+        $notes[] = array(
+            'id' => uniqid('note_'), 
+            'text' => $note_text,
+            'group' => $note_group
+        );
+    }
+    
+    update_option('tcc_saved_notes', $notes);
+    wp_send_json_success($notes);
+}
+
+function tcc_delete_note() {
+    if ( ! is_user_logged_in() ) wp_die();
+    $note_id = sanitize_text_field($_POST['note_id']);
+    $notes = get_option('tcc_saved_notes', array());
+    
+    $new_notes = array();
+    foreach($notes as $n) {
+        if($n['id'] !== $note_id) $new_notes[] = $n;
+    }
+    
+    update_option('tcc_saved_notes', $new_notes);
+    wp_send_json_success($new_notes);
 }

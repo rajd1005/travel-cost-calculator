@@ -283,6 +283,56 @@ function tcc_render_calculator_form() {
                 <a href="#" id="tcc_open_btn" target="_blank" class="tcc-btn-secondary" style="margin:0; line-height:2.2; text-decoration:none;">Open</a>
             </div>
         </div>
+
+        <style>
+            #tcc-notes-toggle {
+                position: fixed; bottom: 30px; right: 30px; background: #b93b59; color: #fff; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 9999; border: none; padding: 0; outline: none; touch-action: manipulation;
+            }
+            #tcc-notes-toggle:hover { background: #9d314b; }
+            #tcc-notes-modal-content {
+                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; width: 350px; max-width: 94%; border-radius: 6px; display: flex; flex-direction: column; max-height: 85vh; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            }
+            .tcc-note-item { background: #fff; border: 1px solid #e2e8f0; border-radius: 4px; padding: 10px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+            @media (max-width: 600px) {
+                #tcc-notes-toggle { bottom: 15px; right: 15px; width: 46px; height: 46px; font-size: 20px; }
+                #tcc-notes-modal-content { width: 92%; max-height: 90vh; }
+            }
+        </style>
+
+        <button type="button" id="tcc-notes-toggle" title="Quick Notes">📝</button>
+
+        <div id="tcc-notes-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:10000; touch-action: manipulation;">
+            <div id="tcc-notes-modal-content">
+                <div style="padding:10px 12px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; background:#f8fafc; border-radius:6px 6px 0 0;">
+                    <h3 style="margin:0; font-size:14px; color:#0f172a; display:flex; align-items:center; gap:6px;">📝 Quick Notes</h3>
+                    <button type="button" id="tcc-notes-close" style="cursor:pointer; font-size:22px; color:#64748b; background:none; border:none; padding:0; line-height:1;">&times;</button>
+                </div>
+                
+                <div style="padding:8px 12px; background:#f1f5f9; border-bottom:1px solid #e2e8f0; display:flex; gap:8px; align-items:center;">
+                    <label style="font-size:11px; color:#475569; font-weight:bold; margin:0;">Filter:</label>
+                    <select id="tcc-notes-filter" style="flex:1; padding:4px 6px; font-size:11px; border-radius:3px; border:1px solid #cbd5e1; margin:0; outline:none;">
+                        <option value="All">All Groups</option>
+                    </select>
+                </div>
+
+                <div style="padding:12px; overflow-y:auto; flex:1; min-height:120px; background:#f8fafc;" id="tcc-notes-list">
+                    </div>
+
+                <div style="padding:12px; border-top:1px solid #e2e8f0; background:#fff; border-radius:0 0 6px 6px;">
+                    <input type="text" id="tcc-new-note-group" placeholder="Group (e.g. Leads)" list="tcc-note-groups-list" value="General" style="width:100%; border:1px solid #cbd5e1; border-radius:3px; padding:6px; font-size:11px; margin-bottom:6px; outline:none;">
+                    <datalist id="tcc-note-groups-list"></datalist>
+                    
+                    <textarea id="tcc-new-note-text" rows="2" style="width:100%; border:1px solid #cbd5e1; border-radius:3px; padding:6px; font-size:12px; margin-bottom:8px; resize:vertical; outline:none;" placeholder="Type a new note here..."></textarea>
+                    
+                    <input type="hidden" id="tcc-edit-note-id" value="">
+                    <div style="display:flex; justify-content:space-between; gap:6px;">
+                        <button type="button" id="tcc-cancel-edit-note" class="tcc-btn-secondary" style="display:none; margin:0; padding:5px 10px; font-size:11px; flex:1;">Cancel</button>
+                        <button type="button" id="tcc-save-note-btn" class="tcc-btn-primary" style="margin:0; padding:5px 10px; font-size:11px; flex:2;">Save Note</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
     <?php
     return ob_get_clean();

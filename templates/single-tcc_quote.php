@@ -30,9 +30,9 @@ function tcc_format_inr($num) {
 
 // Function to safely turn newlines into HTML bullets
 function tcc_render_bullets($text) {
-    if (empty(trim($text))) return "<p style='font-size:13px; color:#64748b; margin:0;'>None specified.</p>";
+    if (empty(trim($text))) return "<p style='font-size:12px; color:#64748b; margin:0;'>None specified.</p>";
     $lines = preg_split("/\r\n|\n|\r/", $text);
-    $html = "<ul style='margin:0; padding-left:20px; font-size:13px; line-height:1.6; color:inherit;'>";
+    $html = "<ul style='margin:0; padding-left:15px; font-size:12px; line-height:1.6; color:inherit;'>";
     foreach($lines as $line) if(trim($line) !== '') $html .= "<li>" . esc_html(trim($line)) . "</li>";
     $html .= "</ul>";
     return $html;
@@ -152,7 +152,6 @@ $gst_pct_disp = isset($d['gst_pct']) ? $d['gst_pct'] : 5;
 $pp_gst = isset($quote_data['per_person_with_gst']) ? $quote_data['per_person_with_gst'] : ($grand_total / max(1, $d['pax']));
 $pax_count = max(1, $d['pax']);
 
-// Identify the initial un-discounted base so math is totally transparent
 $discount_amt = floatval($d['discount_amount']);
 $final_base = $quote_data['per_person'] * $pax_count;
 $initial_base = $final_base + $discount_amt;
@@ -184,6 +183,8 @@ if ($is_cancelled) {
 }
 ?>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
 <style>
     :root {
         --tcc-primary: <?php echo $doc_color; ?>;
@@ -197,30 +198,28 @@ if ($is_cancelled) {
         --tcc-radius: 8px;
     }
     .tcc-container * { box-sizing: border-box; }
-    .tcc-container { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 800px; margin: 20px auto; background: var(--tcc-bg-card); border-radius: var(--tcc-radius); box-shadow: 0 4px 12px rgba(0,0,0,0.08); overflow: hidden; color: var(--tcc-text); line-height: 1.5; }
+    .tcc-container { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 800px; margin: 20px auto; background: var(--tcc-bg-card); border-radius: var(--tcc-radius); box-shadow: 0 4px 12px rgba(0,0,0,0.08); color: var(--tcc-text); line-height: 1.5; }
     
-    .tcc-header { background: var(--tcc-primary); color: #fff; padding: 25px 20px; text-align: center; }
+    .tcc-header { background: var(--tcc-primary); color: #fff; padding: 25px 20px; text-align: center; border-radius: var(--tcc-radius) var(--tcc-radius) 0 0; }
     .tcc-header h1 { margin: 0 0 5px; font-size: 22px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }
     .tcc-header h2 { margin: 0 0 2px; font-size: 16px; opacity: 0.9; font-weight: 500; }
     .tcc-header .badge { display: inline-block; background: var(--tcc-badge); padding: 5px 12px; border-radius: 20px; font-size: 11px; margin-top: 10px; font-weight: 600; letter-spacing: 0.5px; }
 
     .tcc-body { padding: 20px; }
-    .tcc-section { margin-bottom: 25px; }
+    .tcc-section { margin-bottom: 25px; } 
+    
     .tcc-section-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--tcc-border); padding-bottom: 8px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px; }
     .tcc-section-title { font-size: 18px; font-weight: 700; color: var(--tcc-text-dark); margin: 0; display:flex; align-items:center; gap:8px; }
 
     .tcc-btn { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 5px 12px; border-radius: 4px; cursor: pointer; border: none; transition: 0.2s; background: #64748b; color: #fff; text-transform: uppercase; letter-spacing: 0.5px; text-decoration: none; }
     .tcc-btn:hover { background: #475569; color: #fff; }
-    
     .tcc-btn-wa { background: #22c55e; }
     .tcc-btn-wa:hover { background: #16a34a; }
 
-    /* Compact Grid Details */
     .tcc-grid-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; background: #f8fafc; padding: 15px; border-radius: var(--tcc-radius); border: 1px solid var(--tcc-border); }
     .tcc-detail-item { font-size: 13px; color: var(--tcc-text-dark); font-weight: 500; }
     .tcc-detail-item span { display: block; font-size: 10px; color: var(--tcc-text-light); text-transform: uppercase; font-weight: 700; margin-bottom: 2px; }
 
-    /* Compact Timeline */
     .tcc-timeline { border-left: 2px solid var(--tcc-primary); margin-left: 10px; padding-left: 15px; }
     .tcc-timeline-item { position: relative; margin-bottom: 15px; }
     .tcc-timeline-item:last-child { margin-bottom: 0; }
@@ -228,7 +227,6 @@ if ($is_cancelled) {
     .tcc-timeline-title { font-size: 13px; font-weight: 700; color: var(--tcc-primary); margin: 0 0 2px; }
     .tcc-timeline-desc { font-size: 13px; margin: 0; color: var(--tcc-text); }
 
-    /* Compact Pricing Box */
     .tcc-price-grid { display: grid; grid-template-columns: 1fr; gap: 20px; background: #f8fafc; padding: 20px; border-radius: var(--tcc-radius); border: 1px solid var(--tcc-border); margin-bottom: 30px; }
     @media(min-width: 650px) { .tcc-price-grid { grid-template-columns: 1fr 1fr; } }
     .tcc-price-row { display: flex; justify-content: space-between; font-size: 14.5px; color: var(--tcc-text-light); margin-bottom: 12px; }
@@ -238,7 +236,6 @@ if ($is_cancelled) {
     .tcc-price-highlight span:last-child { font-size: 17px; }
     .tcc-status-box { text-align: center; margin-top: 15px; padding: 12px; border-radius: 6px; font-weight: 900; font-size: 16px; letter-spacing: 1px; }
 
-    /* Inclusions Grid */
     .tcc-inc-grid { display: grid; grid-template-columns: 1fr; gap: 15px; }
     @media(min-width: 650px) { .tcc-inc-grid { grid-template-columns: 1fr 1fr 1fr; } }
     .tcc-inc-card { padding: 18px; border-radius: var(--tcc-radius); }
@@ -246,18 +243,15 @@ if ($is_cancelled) {
     
     .tcc-inc-green { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
     .tcc-inc-green h4 { color: #15803d; }
-    
     .tcc-inc-red { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
     .tcc-inc-red h4 { color: #b91c1c; }
-    
     .tcc-inc-yellow { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
     .tcc-inc-yellow h4 { color: #b45309; }
 
-    /* Copy Feedback */
     .tcc-container .WA-copy-feedback { pointer-events: none; position: fixed; top: 10px; left: 50%; transform: translateX(-50%) translateY(-20px); background: rgba(0,0,0,0.8); color: #fff; padding: 6px 15px; border-radius: 20px; font-size: 11px; font-weight: bold; opacity: 0; transition: 0.3s; z-index: 999; }
     .tcc-container .WA-copy-feedback.show { opacity: 1; transform: translateX(-50%) translateY(0); }
     
-    /* MOBILE ACTIVATION - OVERRIDES */
+    /* Responsive Mode */
     @media(max-width: 600px) {
         .tcc-container { margin: 0; border-radius: 0; border: none; box-shadow: none; }
         .tcc-header { padding: 20px 15px; }
@@ -270,7 +264,7 @@ if ($is_cancelled) {
     }
 </style>
 
-<div class="tcc-container">
+<div class="tcc-container" id="tcc_web_view">
     <div class="WA-copy-feedback" id="tcc_copy_feedback">Copied to clipboard!</div>
     
     <div class="tcc-header">
@@ -291,9 +285,11 @@ if ($is_cancelled) {
             <div class="tcc-section-header" style="padding-right: 5px;">
                 <h3 class="tcc-section-title">📍 Trip Details</h3>
                 <?php if(is_user_logged_in()): ?>
-                    <div style="display:flex; gap:5px;">
+                    <div class="tcc-action-buttons" style="display:flex; gap:5px;">
                         <button class="tcc-btn" onclick="tccCopySection(this, '<?php echo rawurlencode($txt_trip); ?>')">📋 Copy</button>
                         <a href="<?php echo $wa_api_base . rawurlencode($txt_trip); ?>" target="_blank" class="tcc-btn tcc-btn-wa">💬 Send</a>
+                        <button class="tcc-btn" style="background:#2563eb;" onclick="tccSendEmail(this, <?php echo $post->ID; ?>, '<?php echo esc_js(isset($d['client_email']) ? $d['client_email'] : ''); ?>', '<?php echo esc_js(isset($d['client_name']) ? $d['client_name'] : ''); ?>', '<?php echo esc_js(isset($d['client_phone']) ? $d['client_phone'] : ''); ?>')">📧 Email</button>
+                        <button class="tcc-btn" style="background:#dc2626;" onclick="tccDownloadPDF(this)">📄 PDF</button>
                     </div>
                 <?php endif; ?>
             </div>
@@ -318,7 +314,7 @@ if ($is_cancelled) {
             <div class="tcc-section-header" style="padding-right: 5px;">
                 <h3 class="tcc-section-title">📅 Itinerary Details</h3>
                 <?php if(is_user_logged_in()): ?>
-                    <div style="display:flex; gap:5px;">
+                    <div class="tcc-action-buttons" style="display:flex; gap:5px;">
                         <button class="tcc-btn" onclick="tccCopySection(this, '<?php echo rawurlencode($txt_itin); ?>')">📋 Copy</button>
                         <a href="<?php echo $wa_api_base . rawurlencode($txt_itin); ?>" target="_blank" class="tcc-btn tcc-btn-wa">💬 Send</a>
                     </div>
@@ -348,7 +344,7 @@ if ($is_cancelled) {
                     <span style="font-size:20px;">🏨</span> <span style="background:#e2e8f0; padding:4px 8px; border-radius:4px;">Hotels Selected</span>
                 </h3>
                 <?php if(is_user_logged_in()): ?>
-                    <div style="display:flex; gap:5px;">
+                    <div class="tcc-action-buttons" style="display:flex; gap:5px;">
                         <button class="tcc-btn tcc-btn-wa" onclick="tccCopySection(this, '<?php echo rawurlencode($txt_hotels); ?>')">WA Copy</button>
                     </div>
                 <?php endif; ?>
@@ -389,7 +385,7 @@ if ($is_cancelled) {
             <div class="tcc-section-header" style="padding-right: 5px;">
                 <h3 class="tcc-section-title">🧾 Pricing & Receipts</h3>
                 <?php if(is_user_logged_in()): ?>
-                    <div style="display:flex; gap:5px;">
+                    <div class="tcc-action-buttons" style="display:flex; gap:5px;">
                         <button class="tcc-btn" onclick="tccCopySection(this, '<?php echo rawurlencode($txt_price); ?>')">📋 Copy</button>
                         <a href="<?php echo $wa_api_base . rawurlencode($txt_price); ?>" target="_blank" class="tcc-btn tcc-btn-wa">💬 Send</a>
                     </div>
@@ -478,7 +474,7 @@ if ($is_cancelled) {
                 <h4>
                     <span>✅ Included</span> 
                     <?php if(is_user_logged_in()): ?>
-                        <div style="display:flex; gap:3px;">
+                        <div class="tcc-action-buttons" style="display:flex; gap:3px;">
                             <button class="tcc-btn" style="padding:3px 6px; font-size:9px;" onclick="tccCopySection(this, '<?php echo rawurlencode($txt_inc); ?>')">Copy</button>
                             <a href="<?php echo $wa_api_base . rawurlencode($txt_inc); ?>" target="_blank" class="tcc-btn tcc-btn-wa" style="padding:3px 6px; font-size:9px;">Send</a>
                         </div>
@@ -491,7 +487,7 @@ if ($is_cancelled) {
                 <h4>
                     <span>❌ Excluded</span> 
                     <?php if(is_user_logged_in()): ?>
-                        <div style="display:flex; gap:3px;">
+                        <div class="tcc-action-buttons" style="display:flex; gap:3px;">
                             <button class="tcc-btn" style="padding:3px 6px; font-size:9px;" onclick="tccCopySection(this, '<?php echo rawurlencode($txt_exc); ?>')">Copy</button>
                             <a href="<?php echo $wa_api_base . rawurlencode($txt_exc); ?>" target="_blank" class="tcc-btn tcc-btn-wa" style="padding:3px 6px; font-size:9px;">Send</a>
                         </div>
@@ -504,7 +500,7 @@ if ($is_cancelled) {
                 <h4>
                     <span>💳 Payment Terms</span> 
                     <?php if(is_user_logged_in()): ?>
-                        <div style="display:flex; gap:3px;">
+                        <div class="tcc-action-buttons" style="display:flex; gap:3px;">
                             <button class="tcc-btn" style="padding:3px 6px; font-size:9px;" onclick="tccCopySection(this, '<?php echo rawurlencode($txt_pay); ?>')">Copy</button>
                             <a href="<?php echo $wa_api_base . rawurlencode($txt_pay); ?>" target="_blank" class="tcc-btn tcc-btn-wa" style="padding:3px 6px; font-size:9px;">Send</a>
                         </div>
@@ -517,10 +513,167 @@ if ($is_cancelled) {
     </div>
 </div>
 
+<div id="tcc_hidden_pdf_template" style="display:none; width: 800px; padding: 25px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; background: #fff; box-sizing: border-box;">
+    
+    <div style="text-align: center; border-bottom: 2px solid <?php echo $doc_color; ?>; padding-bottom: 15px; margin-bottom: 20px;">
+        <h1 style="margin: 0 0 5px; font-size: 24px; color: <?php echo $doc_color; ?>; text-transform: uppercase;">SOULFUL TOUR & TRAVELS</h1>
+        <div style="font-size: 12px; color: #64748b; margin-bottom: 10px;">GSTIN: 19AXIPD7432L1Z5</div>
+        <div style="display: inline-block; background: <?php echo $badge_bg; ?>; color: #fff; padding: 5px 15px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-bottom: 15px;"><?php echo $doc_title; ?></div>
+        
+        <table style="width: 100%; border: none; font-size: 13px;">
+            <tr>
+                <td style="text-align: left; width: 50%;"><strong>Prepared For:</strong> <?php echo esc_html(isset($d['client_name']) && !empty($d['client_name']) ? $d['client_name'] : 'Valued Client'); ?></td>
+                <td style="text-align: right; width: 50%;"><strong>Date:</strong> <?php echo date('d M Y'); ?></td>
+            </tr>
+            <tr>
+                <td style="text-align: left; width: 50%;"><strong>Phone:</strong> <?php echo esc_html(isset($d['client_phone']) && !empty($d['client_phone']) ? $d['client_phone'] : 'N/A'); ?></td>
+                <td style="text-align: right; width: 50%;"><strong>Email:</strong> <?php echo esc_html(isset($d['client_email']) && !empty($d['client_email']) ? $d['client_email'] : 'N/A'); ?></td>
+            </tr>
+        </table>
+    </div>
+
+    <div style="margin-bottom: 20px;">
+        <h3 style="border-bottom: 1px solid #e2e8f0; color: #0f172a; padding-bottom: 5px; font-size: 16px; margin-bottom: 10px;">📍 Trip Details</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px; border: 1px solid #e2e8f0;">
+            <tr>
+                <td style="padding: 8px; background: #f8fafc; font-weight: bold; border: 1px solid #e2e8f0; width: 20%;">Destination</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0; width: 30%;"><?php echo esc_html($d['destination']); ?></td>
+                <td style="padding: 8px; background: #f8fafc; font-weight: bold; border: 1px solid #e2e8f0; width: 20%;">Duration</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0; width: 30%;"><?php echo esc_html($d['days']); ?> Days / <?php echo esc_html($d['days'] - 1); ?> Nights</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; background: #f8fafc; font-weight: bold; border: 1px solid #e2e8f0;">Start Date</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0;"><?php echo date('d M Y', strtotime($d['start_date'])); ?></td>
+                <td style="padding: 8px; background: #f8fafc; font-weight: bold; border: 1px solid #e2e8f0;">End Date</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0;"><?php echo date('d M Y', strtotime($d['end_date'])); ?></td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; background: #f8fafc; font-weight: bold; border: 1px solid #e2e8f0;">Travelers</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0;"><?php echo esc_html($d['pax']); ?> Adults, <?php echo esc_html($d['child']); ?> Child</td>
+                <td style="padding: 8px; background: #f8fafc; font-weight: bold; border: 1px solid #e2e8f0;">Rooms</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0;"><?php echo esc_html($d['rooms']); ?> Rooms / <?php echo esc_html($d['extra_beds']); ?> Extra Beds</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; background: #f8fafc; font-weight: bold; border: 1px solid #e2e8f0;">Category</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0;"><?php echo esc_html($d['hotel_cat']); ?></td>
+                <td style="padding: 8px; background: #f8fafc; font-weight: bold; border: 1px solid #e2e8f0;">Transport</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0;"><?php echo wp_kses_post($d['transport_string']); ?><br><span style="font-size:10px; color:#64748b;">(Pickup: <?php echo esc_html($d['pickup']); ?> | Drop: <?php echo esc_html($drop_txt); ?>)</span></td>
+            </tr>
+        </table>
+    </div>
+
+    <?php if(isset($d['itinerary']) && !empty($d['itinerary']) && array_filter($d['itinerary'])): ?>
+    <div style="margin-bottom: 20px;">
+        <h3 style="border-bottom: 1px solid #e2e8f0; color: #0f172a; padding-bottom: 5px; font-size: 16px; margin-bottom: 10px;">📅 Itinerary Details</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px; border: 1px solid #e2e8f0;">
+            <?php foreach($d['itinerary'] as $index => $day_text): 
+                if(trim($day_text) === '') continue;
+                $stay_html = !empty($raw_stays[$index]) ? " <strong style='color:".$doc_color.";'>[n/s-" . esc_html(trim($raw_stays[$index])) . "]</strong>" : "";
+            ?>
+            <tr class="pdf-avoid-break">
+                <td style="padding: 10px; background: #f8fafc; font-weight: bold; color: <?php echo $doc_color; ?>; border: 1px solid #e2e8f0; width: 12%; vertical-align: top;">Day <?php echo $index + 1; ?></td>
+                <td style="padding: 10px; border: 1px solid #e2e8f0; line-height: 1.5; width: 88%; vertical-align: top;"><?php echo esc_html($day_text) . $stay_html; ?></td>
+            </tr>
+            <?php endforeach; ?>
+        </table>
+    </div>
+    <?php endif; ?>
+
+    <div style="margin-bottom: 20px;">
+        <h3 style="border-bottom: 1px solid #e2e8f0; color: #0f172a; padding-bottom: 5px; font-size: 16px; margin-bottom: 10px;">🏨 Hotels Selected</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px; border: 1px solid #e2e8f0;">
+            <thead>
+                <tr style="background: #f1f5f9;">
+                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: left; width: 25%;">Location</th>
+                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: left; width: 60%;">Hotels / Similar</th>
+                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: center; width: 15%;">Nights</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach($d['stays'] as $stay): 
+                    $formatted_hotels = array();
+                    foreach($stay['options'] as $opt) { $formatted_hotels[] = "<strong>".esc_html($opt['name'])."</strong>"; }
+                    $combined_hotels = implode(' / ', $formatted_hotels);
+                    if(empty($combined_hotels)) $combined_hotels = "No selection made";
+                    $loc_cat = isset($stay['category']) && !empty($stay['category']) ? $stay['category'] : $d['hotel_cat'];
+                ?>
+                <tr class="pdf-avoid-break">
+                    <td style="padding: 8px; border: 1px solid #e2e8f0; vertical-align: top;"><strong><?php echo esc_html($stay['place']); ?></strong><br><span style="font-size:10px; color:#b91c1c;"><?php echo esc_html($loc_cat); ?></span></td>
+                    <td style="padding: 8px; border: 1px solid #e2e8f0; vertical-align: top; line-height: 1.5;"><?php echo $combined_hotels; ?></td>
+                    <td style="padding: 8px; border: 1px solid #e2e8f0; text-align: center; font-weight: bold; vertical-align: middle;"><?php echo esc_html($stay['nights']); ?></td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="pdf-avoid-break" style="margin-bottom: 20px;">
+        <h3 style="border-bottom: 1px solid #e2e8f0; color: #0f172a; padding-bottom: 5px; font-size: 16px; margin-bottom: 10px;">🧾 Pricing Summary</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; border: 1px solid #e2e8f0;">
+            <tr>
+                <td style="padding: 8px 10px; border: 1px solid #e2e8f0; background: #f8fafc; width: 60%;">Per Person (Excl. GST)</td>
+                <td style="padding: 8px 10px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold; width: 40%;"><?php echo tcc_format_inr($quote_data['per_person']); ?></td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 10px; border: 1px solid #e2e8f0; background: #f8fafc;">Total Base (<?php echo esc_html($pax_count); ?> Pax)</td>
+                <td style="padding: 8px 10px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold;"><?php echo tcc_format_inr($discount_amt > 0 ? $initial_base : $final_base); ?></td>
+            </tr>
+            <?php if($discount_amt > 0): ?>
+            <tr>
+                <td style="padding: 8px 10px; border: 1px solid #e2e8f0; background: #fef2f2; color: #dc2626;">Discount Applied</td>
+                <td style="padding: 8px 10px; border: 1px solid #e2e8f0; background: #fef2f2; text-align: right; font-weight: bold; color: #dc2626;">-<?php echo tcc_format_inr($discount_amt); ?></td>
+            </tr>
+            <?php endif; ?>
+            <tr>
+                <td style="padding: 8px 10px; border: 1px solid #e2e8f0; background: #f8fafc;">GST (<?php echo $gst_pct_disp; ?>%)</td>
+                <td style="padding: 8px 10px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold;"><?php echo tcc_format_inr($quote_data['gst']); ?></td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border: 1px solid #e2e8f0; background: #f1f5f9; font-size: 15px; font-weight: bold;">Total Package Value</td>
+                <td style="padding: 10px; border: 1px solid #e2e8f0; background: #f1f5f9; text-align: right; font-size: 15px; font-weight: bold;"><?php echo tcc_format_inr($grand_total); ?></td>
+            </tr>
+            <tr>
+                <td style="padding: 12px 10px; border: 1px solid #bfdbfe; background: #eff6ff; font-size: 16px; font-weight: bold; color: #1d4ed8;">Per Person (Inc. GST)</td>
+                <td style="padding: 12px 10px; border: 1px solid #bfdbfe; background: #eff6ff; text-align: right; font-size: 16px; font-weight: bold; color: #1d4ed8;"><?php echo tcc_format_inr($pp_gst); ?></td>
+            </tr>
+            <?php if($is_cancelled): ?>
+                <tr><td colspan="2" style="padding: 10px; border: 1px solid #e2e8f0; background: #fef2f2; color: #dc2626; text-align: center; font-weight: bold;">BOOKING CANCELLED</td></tr>
+            <?php elseif($total_paid > 0): ?>
+                <tr>
+                    <td style="padding: 10px; border: 1px solid #e2e8f0; color: #16a34a; font-weight: bold;">Total Received</td>
+                    <td style="padding: 10px; border: 1px solid #e2e8f0; color: #16a34a; text-align: right; font-weight: bold;"><?php echo tcc_format_inr($total_paid); ?></td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px; border: 1px solid #e2e8f0; color: #dc2626; font-weight: bold;">Balance Due</td>
+                    <td style="padding: 10px; border: 1px solid #e2e8f0; color: #dc2626; text-align: right; font-weight: bold;"><?php echo tcc_format_inr($balance); ?></td>
+                </tr>
+            <?php endif; ?>
+        </table>
+    </div>
+
+    <div class="pdf-avoid-break">
+        <table style="width: 100%; border-collapse: separate; border-spacing: 15px 0; margin-left: -15px; margin-right: -15px; font-size: 11px;">
+            <tr>
+                <td style="width: 33.3%; padding: 15px; vertical-align: top; border: 1px solid #bbf7d0; background: #f0fdf4; color: #166534; border-radius: 4px;">
+                    <h4 style="margin: 0 0 8px; font-size: 13px; border-bottom: 1px solid #bbf7d0; padding-bottom: 4px;">✅ Included</h4>
+                    <?php echo tcc_render_bullets($d['inclusions']); ?>
+                </td>
+                <td style="width: 33.3%; padding: 15px; vertical-align: top; border: 1px solid #fecaca; background: #fef2f2; color: #991b1b; border-radius: 4px;">
+                    <h4 style="margin: 0 0 8px; font-size: 13px; border-bottom: 1px solid #fecaca; padding-bottom: 4px;">❌ Excluded</h4>
+                    <?php echo tcc_render_bullets($d['exclusions']); ?>
+                </td>
+                <td style="width: 33.3%; padding: 15px; vertical-align: top; border: 1px solid #fde68a; background: #fffbeb; color: #92400e; border-radius: 4px;">
+                    <h4 style="margin: 0 0 8px; font-size: 13px; border-bottom: 1px solid #fde68a; padding-bottom: 4px;">💳 Payment Terms</h4>
+                    <?php echo tcc_render_bullets($d['payment_terms']); ?>
+                </td>
+            </tr>
+        </table>
+    </div>
+</div>
+
 <script>
 function tccCopySection(btn, encodedText) {
     let text = decodeURIComponent(encodedText.replace(/\+/g, '%20'));
-    
     if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(text).then(function() { tccShowSuccess(btn); }).catch(function() { tccFallbackCopy(btn, text); });
     } else {
@@ -542,15 +695,146 @@ function tccShowSuccess(btn) {
     let oldText = btn.innerText;
     btn.innerText = 'Copied!';
     btn.style.background = '#16a34a';
-    
     let toast = document.getElementById('tcc_copy_feedback');
     toast.classList.add('show');
-    
     setTimeout(function() { 
         btn.innerText = oldText; 
         btn.style.background = '';
         toast.classList.remove('show');
     }, 2000);
+}
+
+// EMAIL PROMPT LOGIC
+function tccSendEmail(btn, quoteId, currentEmail, clientName, clientPhone) {
+    let oldText = btn.innerText;
+
+    if (!currentEmail || currentEmail.trim() === '') {
+        let newEmail = prompt("⚠️ Client email is missing.\n\nPlease enter the client's email address to instantly save it and send the quotation:");
+        if (!newEmail || newEmail.trim() === '') return;
+
+        btn.innerText = 'Saving...';
+        btn.disabled = true;
+
+        jQuery.post('<?php echo admin_url('admin-ajax.php'); ?>', {
+            action: 'tcc_update_quote_client',
+            quote_id: quoteId,
+            c_name: clientName,
+            c_phone: clientPhone,
+            c_email: newEmail.trim()
+        }, function(res) {
+            if(res.success) {
+                btn.setAttribute('onclick', `tccSendEmail(this, ${quoteId}, '${newEmail.trim()}', '${clientName}', '${clientPhone}')`);
+                executeEmailSend(btn, quoteId, oldText, newEmail.trim());
+            } else {
+                btn.disabled = false;
+                btn.innerText = oldText;
+                alert("Failed to save the new email address.");
+            }
+        });
+    } else {
+        if(!confirm('Send quotation email to ' + currentEmail + ' (BCC sent to Admin)?')) return;
+        executeEmailSend(btn, quoteId, oldText, currentEmail);
+    }
+}
+
+function executeEmailSend(btn, quoteId, oldText, email) {
+    btn.innerText = 'Sending...';
+    btn.disabled = true;
+    
+    jQuery.post('<?php echo admin_url('admin-ajax.php'); ?>', {
+        action: 'tcc_send_quote_email',
+        quote_id: quoteId
+    }, function(res) {
+        btn.disabled = false;
+        btn.innerText = oldText;
+        if(res.success) {
+            alert(res.data);
+        } else {
+            alert("Error: " + res.data);
+        }
+    }).fail(function() {
+        btn.disabled = false;
+        btn.innerText = oldText;
+        alert("Server error. Check configuration.");
+    });
+}
+
+// FLAWLESS PDF DOWNLOAD LOGIC
+function tccDownloadPDF(btn) {
+    let oldText = btn.innerText;
+    btn.innerText = 'Generating...';
+    btn.disabled = true;
+
+    // Save the user's current scroll position so we can return them here smoothly
+    let currentScroll = window.scrollY;
+
+    // The overlay is ignored by html2canvas, making the snapshot look clean behind the scenes
+    let overlay = document.createElement('div');
+    overlay.setAttribute('data-html2canvas-ignore', 'true');
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.backgroundColor = '#ffffff';
+    overlay.style.zIndex = '9999999';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.fontSize = '20px';
+    overlay.style.fontWeight = 'bold';
+    overlay.style.color = '#334155';
+    overlay.innerHTML = '⚙️ Generating PDF... Please wait.';
+    document.body.appendChild(overlay);
+
+    let webView = document.getElementById('tcc_web_view');
+    let pdfView = document.getElementById('tcc_hidden_pdf_template');
+
+    // Swap the displays
+    webView.style.display = 'none';
+    
+    // Set PDF view to standard relative flow. This prevents the "clipping" issue entirely!
+    pdfView.style.display = 'block';
+    pdfView.style.position = 'relative';
+    pdfView.style.margin = '0 auto';
+    pdfView.style.width = '800px';
+
+    // Force browser scroll to top. If html2canvas starts from the middle of the page, it cuts off the top/bottom.
+    window.scrollTo(0, 0);
+
+    const opt = {
+        margin:       [10, 10, 10, 10], 
+        filename:     'Quotation_<?php echo sanitize_file_name($d['client_name'] . "_" . $d['destination']); ?>.pdf',
+        image:        { type: 'jpeg', quality: 1.0 },
+        html2canvas:  { scale: 2, useCORS: true, windowWidth: 800, scrollY: 0 },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak:    { mode: 'css', avoid: '.pdf-avoid-break' }
+    };
+
+    // A 500ms timeout ensures all fonts and table borders are painted by the browser before the snapshot
+    setTimeout(function() {
+        html2pdf().set(opt).from(pdfView).save().then(() => {
+            // Restore everything
+            pdfView.style.display = 'none';
+            webView.style.display = 'block';
+            document.body.removeChild(overlay);
+            
+            // Jump back to where the user was looking
+            window.scrollTo(0, currentScroll);
+            
+            btn.innerText = oldText;
+            btn.disabled = false;
+        }).catch(err => {
+            console.error(err);
+            pdfView.style.display = 'none';
+            webView.style.display = 'block';
+            document.body.removeChild(overlay);
+            window.scrollTo(0, currentScroll);
+            btn.innerText = oldText;
+            btn.disabled = false;
+            alert("An error occurred during PDF generation.");
+        });
+    }, 500);
 }
 </script>
 

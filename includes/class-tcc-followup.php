@@ -68,12 +68,19 @@ function tcc_render_followup_dashboard() {
         if(in_array($status, ['Booking Done', 'Canceled', 'No Response']) || $is_expired) {
             $is_active = false;
         }
+        
+        $raw_c_name = isset($d['client_name']) ? $d['client_name'] : '';
+        $raw_c_phone = isset($d['client_phone']) ? $d['client_phone'] : '';
+        $raw_c_email = isset($d['client_email']) ? $d['client_email'] : '';
 
         $leads[] = array(
             'id' => $q->ID,
             'client_name' => !empty($d['client_name']) ? $d['client_name'] : 'Unknown Client',
             'client_phone' => (!empty($d['client_phone']) && trim($d['client_phone']) !== '') ? $d['client_phone'] : 'N/A',
             'client_email' => !empty($d['client_email']) ? $d['client_email'] : '',
+            'raw_c_name' => $raw_c_name,
+            'raw_c_phone' => $raw_c_phone,
+            'raw_c_email' => $raw_c_email,
             'destination' => $d['destination'],
             'start_date' => $start_date,
             'pax' => $pax,
@@ -112,12 +119,14 @@ function tcc_render_followup_dashboard() {
         .tcc-lead-table tr:hover { background: #f8fafc; }
         .lead-status-select { padding: 4px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 3px; max-width:100%; }
         .lead-date-input { padding: 4px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 3px; width: 115px; max-width:100%; }
-        .lead-save-btn { background: #2563eb; color: #fff; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 11px; transition: 0.2s; }
+        .lead-save-btn { background: #2563eb; color: #fff; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 11px; transition: 0.2s; font-weight:bold; }
         .lead-save-btn:hover { background: #1d4ed8; }
         .star-priority { cursor: pointer; font-size: 18px; color: #cbd5e1; user-select: none; transition: 0.2s; }
         .star-priority.active { color: #eab308; }
-        .lead-wa-btn { background: #25D366; color: #fff; text-decoration: none; padding: 4px 8px; border-radius: 3px; font-size: 11px; display: inline-block; transition: 0.2s; }
+        .lead-wa-btn { background: #25D366; color: #fff; text-decoration: none; padding: 4px 8px; border-radius: 3px; font-size: 11px; display: inline-block; transition: 0.2s; font-weight:bold;}
         .lead-wa-btn:hover { background: #1da851; color:#fff;}
+        .lead-email-btn { background: #e0e7ff; color: #2563eb; border: 1px solid #bfdbfe; padding: 3px 8px; border-radius: 3px; font-size: 11px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .lead-email-btn:hover { background: #bfdbfe; }
         .lead-expired { opacity: 0.6; background: #fef2f2 !important; }
 
         /* Compact Mobile Responsive Card Transformation */
@@ -149,7 +158,7 @@ function tcc_render_followup_dashboard() {
             .lead-status-select, .lead-date-input { width: 100%; }
             .tcc-lead-table td:nth-child(7) { margin-top: 12px; padding-top: 10px; border-top: 1px solid #f1f5f9; }
             .tcc-lead-table td:nth-child(7) > div { justify-content: flex-start; gap: 8px; }
-            .lead-save-btn, .lead-wa-btn { padding: 6px 12px; font-size: 12px; font-weight: bold; }
+            .lead-save-btn, .lead-wa-btn, .lead-email-btn { padding: 6px 12px; font-size: 12px; }
         }
     </style>
 
@@ -207,7 +216,13 @@ function tcc_render_followup_dashboard() {
                         $wa_msg = rawurlencode("Hello,\nJust following up regarding your trip inquiry for {$l['destination']}. Let me know if you have any questions!\nView Quote: {$l['link']}");
                         $wa_link = "https://wa.me/" . preg_replace('/[^0-9]/', '', $l['client_phone']) . "?text=" . $wa_msg;
                     ?>
-                    <tr class="<?php echo $tr_class; ?>" data-id="<?php echo $l['id']; ?>" data-search-string="<?php echo esc_attr($search_string); ?>" data-quote-date="<?php echo esc_attr($l['quote_date']); ?>">
+                    <tr class="<?php echo $tr_class; ?>" 
+                        data-id="<?php echo $l['id']; ?>" 
+                        data-search-string="<?php echo esc_attr($search_string); ?>" 
+                        data-quote-date="<?php echo esc_attr($l['quote_date']); ?>"
+                        data-c-name="<?php echo esc_attr($l['raw_c_name']); ?>"
+                        data-c-phone="<?php echo esc_attr($l['raw_c_phone']); ?>"
+                        data-c-email="<?php echo esc_attr($l['raw_c_email']); ?>">
                         <td style="text-align:center; font-weight:bold; color:#64748b;"><span class="row-count-idx"></span></td>
                         <td>
                             <span class="star-priority <?php echo $l['is_priority'] ? 'active' : ''; ?>" title="Toggle High Priority">★</span>
@@ -243,6 +258,7 @@ function tcc_render_followup_dashboard() {
                                 <?php if($l['client_phone'] != 'N/A'): ?>
                                     <a href="<?php echo $wa_link; ?>" target="_blank" class="lead-wa-btn">WA</a>
                                 <?php endif; ?>
+                                <button type="button" class="lead-email-btn">Email</button>
                                 <a href="<?php echo esc_url($l['link']); ?>" target="_blank" style="color:#475569; font-size:12px; font-weight:bold; line-height:2.2; margin-left:5px; text-decoration:none;">View &rarr;</a>
                             </div>
                         </td>
@@ -336,6 +352,62 @@ function tcc_render_followup_dashboard() {
             }
             $(this).closest('tr').find('.lead-save-btn').trigger('click');
         });
+
+        // Email Prompt & Send Logic
+        $('.lead-email-btn').on('click', function() {
+            let $row = $(this).closest('tr');
+            let quoteId = $row.data('id');
+            let cName = $row.data('c-name');
+            let cPhone = $row.data('c-phone');
+            let cEmail = $row.data('c-email');
+            let $btn = $(this);
+
+            if (!cEmail || cEmail.trim() === '') {
+                let newEmail = prompt("⚠️ Client email is missing.\n\nPlease enter the client's email address to instantly save it and send the quotation:");
+                if (!newEmail || newEmail.trim() === '') {
+                    return; 
+                }
+                
+                let originalText = $btn.text();
+                $btn.text('Saving...').prop('disabled', true);
+                
+                // First save the newly provided email address via existing AJAX logic
+                $.post(tcc_ajax_obj.ajax_url, {
+                    action: 'tcc_update_quote_client',
+                    quote_id: quoteId,
+                    c_name: cName,
+                    c_phone: cPhone,
+                    c_email: newEmail.trim()
+                }, function(res) {
+                    if(res.success) {
+                        $row.data('c-email', newEmail.trim());
+                        sendEmailAJAX(quoteId, $btn, originalText); // Trigger the email
+                    } else {
+                        $btn.text(originalText).prop('disabled', false);
+                        alert("Failed to save the new email address.");
+                    }
+                });
+            } else {
+                if(confirm('Send quotation email to ' + cEmail + ' (BCC sent to Admin)?')) {
+                    sendEmailAJAX(quoteId, $btn, $btn.text());
+                }
+            }
+        });
+
+        function sendEmailAJAX(quoteId, $btn, originalText) {
+            $btn.text('Sending...').prop('disabled', true);
+            $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_send_quote_email', quote_id: quoteId }, function(res) {
+                $btn.text(originalText).prop('disabled', false);
+                if(res.success) {
+                    alert(res.data);
+                } else {
+                    alert("Error: " + res.data);
+                }
+            }).fail(function() {
+                $btn.text(originalText).prop('disabled', false);
+                alert("Server error occurred while sending email.");
+            });
+        }
 
         $('.lead-save-btn').on('click', function() {
             let $row = $(this).closest('tr');
