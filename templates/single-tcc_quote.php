@@ -183,8 +183,6 @@ if ($is_cancelled) {
 }
 ?>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-
 <style>
     :root {
         --tcc-primary: <?php echo $doc_color; ?>;
@@ -759,81 +757,94 @@ function executeEmailSend(btn, quoteId, oldText, email) {
     });
 }
 
-// FLAWLESS PDF DOWNLOAD LOGIC
 function tccDownloadPDF(btn) {
     let oldText = btn.innerText;
-    btn.innerText = 'Generating...';
-    btn.disabled = true;
-
-    // Save the user's current scroll position so we can return them here smoothly
-    let currentScroll = window.scrollY;
-
-    // The overlay is ignored by html2canvas, making the snapshot look clean behind the scenes
-    let overlay = document.createElement('div');
-    overlay.setAttribute('data-html2canvas-ignore', 'true');
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100%';
-    overlay.style.height = '100%';
-    overlay.style.backgroundColor = '#ffffff';
-    overlay.style.zIndex = '9999999';
-    overlay.style.display = 'flex';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
-    overlay.style.fontSize = '20px';
-    overlay.style.fontWeight = 'bold';
-    overlay.style.color = '#334155';
-    overlay.innerHTML = '⚙️ Generating PDF... Please wait.';
-    document.body.appendChild(overlay);
-
-    let webView = document.getElementById('tcc_web_view');
-    let pdfView = document.getElementById('tcc_hidden_pdf_template');
-
-    // Swap the displays
-    webView.style.display = 'none';
+    btn.innerText = 'Preparing PDF...';
     
-    // Set PDF view to standard relative flow. This prevents the "clipping" issue entirely!
-    pdfView.style.display = 'block';
-    pdfView.style.position = 'relative';
-    pdfView.style.margin = '0 auto';
-    pdfView.style.width = '800px';
+    // Get the pure HTML content of your hidden template
+    let pdfContent = document.getElementById('tcc_hidden_pdf_template').innerHTML;
+    let docTitle = 'Quotation_<?php echo sanitize_file_name($d['client_name'] . "_" . $d['destination']); ?>';
+    
+    // Open a completely clean, isolated popup window
+    let printWindow = window.open('', '_blank', 'width=900,height=800');
+    
+    if (!printWindow) {
+        alert("Please allow pop-ups in your browser to generate the PDF.");
+        btn.innerText = oldText;
+        return;
+    }
 
-    // Force browser scroll to top. If html2canvas starts from the middle of the page, it cuts off the top/bottom.
-    window.scrollTo(0, 0);
+    // Write the document into the new window with strict print styles
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>${docTitle}</title>
+            <style>
+                /* Base styles for the isolated window */
+                body { 
+                    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
+                    color: #333; 
+                    margin: 0 auto;
+                    max-width: 800px;
+                    padding: 20px;
+                    background: #fff;
+                }
+                
+                /* FIX FOR GIANT ICONS: Replicate WordPress Emoji CSS */
+                img.emoji {
+                    display: inline !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                    height: 1em !important;
+                    width: 1em !important;
+                    margin: 0 0.07em !important;
+                    vertical-align: -0.1em !important;
+                    background: none !important;
+                    padding: 0 !important;
+                }
 
-    const opt = {
-        margin:       [10, 10, 10, 10], 
-        filename:     'Quotation_<?php echo sanitize_file_name($d['client_name'] . "_" . $d['destination']); ?>.pdf',
-        image:        { type: 'jpeg', quality: 1.0 },
-        html2canvas:  { scale: 2, useCORS: true, windowWidth: 800, scrollY: 0 },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:    { mode: 'css', avoid: '.pdf-avoid-break' }
-    };
-
-    // A 500ms timeout ensures all fonts and table borders are painted by the browser before the snapshot
-    setTimeout(function() {
-        html2pdf().set(opt).from(pdfView).save().then(() => {
-            // Restore everything
-            pdfView.style.display = 'none';
-            webView.style.display = 'block';
-            document.body.removeChild(overlay);
-            
-            // Jump back to where the user was looking
-            window.scrollTo(0, currentScroll);
-            
-            btn.innerText = oldText;
-            btn.disabled = false;
-        }).catch(err => {
-            console.error(err);
-            pdfView.style.display = 'none';
-            webView.style.display = 'block';
-            document.body.removeChild(overlay);
-            window.scrollTo(0, currentScroll);
-            btn.innerText = oldText;
-            btn.disabled = false;
-            alert("An error occurred during PDF generation.");
-        });
+                /* Backup fix for any other custom images placed inside headings */
+                h1 img, h2 img, h3 img, h4 img {
+                    max-height: 1.2em;
+                    width: auto;
+                    vertical-align: middle;
+                }
+                
+                /* CRITICAL: This tells the native browser NEVER to slice tables or headings in half */
+                .pdf-avoid-break, tr, h3, td { 
+                    page-break-inside: avoid !important; 
+                    break-inside: avoid !important; 
+                }
+                
+                /* Print-specific layout rules */
+                @media print {
+                    body { 
+                        padding: 0; 
+                        max-width: 100%; 
+                        margin: 0;
+                    }
+                    /* Sets a clean 15mm margin on the PDF pages */
+                    @page { 
+                        margin: 15mm; 
+                        size: A4 portrait;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            ${pdfContent}
+        </body>
+        </html>
+    `);
+    
+    printWindow.document.close();
+    printWindow.focus();
+    
+    // Give the browser half a second to render the HTML, then trigger the print dialog
+    setTimeout(() => {
+        printWindow.print();
+        btn.innerText = oldText;
     }, 500);
 }
 </script>
