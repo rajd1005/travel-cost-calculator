@@ -97,14 +97,30 @@ function tcc_render_calculator_form() {
                                 <input type="date" name="start_date" id="start_date">
                             </div>
                         </div>
-                        <div class="tcc-grid-2">
+                        <div class="tcc-grid-3">
                             <div class="tcc-form-group">
-                                <label>Adults (>6yr)</label>
-                                <input type="number" name="total_pax" id="total_pax" min="1" value="" placeholder="No. of Adults" required>
+                                <label>Adults (>12yr)</label>
+                                <div class="tcc-qty-wrapper">
+                                    <button type="button" class="tcc-qty-btn minus">-</button>
+                                    <input type="number" name="total_pax" id="total_pax" min="1" value="" placeholder="Adults" required>
+                                    <button type="button" class="tcc-qty-btn plus">+</button>
+                                </div>
                             </div>
                             <div class="tcc-form-group">
-                                <label>Child (<6yr)</label>
-                                <input type="number" name="child_pax" id="child_pax" min="0" value="0" required>
+                                <label>Child (6-12yr)</label>
+                                <div class="tcc-qty-wrapper">
+                                    <button type="button" class="tcc-qty-btn minus">-</button>
+                                    <input type="number" name="child_6_12_pax" id="child_6_12_pax" min="0" value="0" required>
+                                    <button type="button" class="tcc-qty-btn plus">+</button>
+                                </div>
+                            </div>
+                            <div class="tcc-form-group">
+                                <label>Infant (<6yr)</label>
+                                <div class="tcc-qty-wrapper">
+                                    <button type="button" class="tcc-qty-btn minus">-</button>
+                                    <input type="number" name="child_pax" id="child_pax" min="0" value="0" required>
+                                    <button type="button" class="tcc-qty-btn plus">+</button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -133,6 +149,34 @@ function tcc_render_calculator_form() {
                 </div>
 
                 <div class="tcc-card">
+                    <div class="tcc-card-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <span>Trip Add-ons <small style="font-size:11px; font-weight:normal; color:#64748b;">(Cost added to total)</small></span>
+                        <div style="display:flex; gap:5px;">
+                            <select id="addon_preset_select" style="font-size:11px; padding:2px; font-weight:normal; max-width: 140px;">
+                                <option value="">-- Saved Add-ons --</option>
+                            </select>
+                            <button type="button" id="insert_addon_preset" class="tcc-btn-secondary" style="display:none; padding:2px 6px; font-size:11px;" title="Add to Trip">+ Add</button>
+                            <button type="button" id="delete_addon_preset" class="tcc-btn-del" style="display:none; padding:2px 6px; font-size:11px;" title="Delete from Library">🗑️</button>
+                        </div>
+                    </div>
+                    
+                    <div class="tcc-form-group" style="margin-bottom:0;">
+                        <div id="addons-wrapper"></div>
+                        <button type="button" id="add_addon_btn" class="tcc-btn-secondary" style="margin-top:5px; font-size:11px; padding:4px 8px;">+ Custom Add-on</button>
+                        <div id="addon_preset_msg" style="font-size:10px; color:#16a34a; margin-top:3px; display:none; font-weight:bold;"></div>
+                    </div>
+                </div>
+
+                <div style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:15px;">
+                    <button type="button" id="tcc_quick_wa_btn" class="tcc-btn-secondary" style="flex:1; background:#25D366; color:#fff; border-color:#128C7E; font-size:11px !important;">📱 Summary</button>
+                    <button type="button" id="tcc_copy_itinerary_btn" class="tcc-btn-secondary" style="flex:1; font-size:11px !important; background:#fff;">📋 Itinerary</button>
+                    <button type="button" id="tcc_copy_hotels_btn" class="tcc-btn-secondary" style="flex:1; font-size:11px !important; background:#fff;">🏨 Hotels</button>
+                    <button type="button" id="tcc_copy_inclusions_btn" class="tcc-btn-secondary" style="flex:1; font-size:11px !important; background:#fff;">✅ Inclusions</button>
+                    <button type="button" id="tcc_copy_exclusions_btn" class="tcc-btn-secondary" style="flex:1; font-size:11px !important; background:#fff;">❌ Exclusions</button>
+                    <button type="button" id="tcc_copy_payment_btn" class="tcc-btn-secondary" style="flex:1; font-size:11px !important; background:#fff;">💳 Payments</button>
+                </div>
+
+                <div class="tcc-card">
                     <div class="tcc-card-title tcc-step-accordion-header" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; margin-bottom:0;">
                         <span>3. Transportation</span>
                         <span class="tcc-acc-icon" style="color:#b93b59; font-size:12px;">▼</span>
@@ -143,26 +187,23 @@ function tcc_render_calculator_form() {
                             <div class="tcc-form-group">
                                 <label>Pickup Location</label>
                                 <div style="display:flex; gap:4px;">
-                                    <select name="pickup_location" id="calc_pickup" required style="flex:1;"></select>
+                                    <select name="pickup_location" id="calc_pickup" required style="flex:1;">
+                                        <option value="">-- Select --</option>
+                                    </select>
                                     <input type="text" name="pickup_custom" id="calc_pickup_custom" placeholder="Custom Name (Opt.)" style="flex:1;">
                                 </div>
                             </div>
                             <div class="tcc-form-group">
                                 <label>Drop Location</label>
                                 <div style="display:flex; gap:4px;">
-                                    <select name="drop_location" id="calc_drop" required style="flex:1;"></select>
+                                    <select name="drop_location" id="calc_drop" required style="flex:1;">
+                                        <option value="">-- Select --</option>
+                                    </select>
                                     <input type="text" name="drop_custom" id="calc_drop_custom" placeholder="Custom Name (Opt.)" style="flex:1;">
                                 </div>
                             </div>
                         </div>
-                        <div id="transport-wrapper">
-                            <div class="transport-row tcc-repeater-row" style="flex-wrap:wrap;">
-                                <select name="transportation[]" class="transport_dropdown" required style="flex:3;"></select>
-                                <input type="number" name="transport_qty[]" value="1" min="1" placeholder="Qty" required style="flex:1;">
-                                <button type="button" class="remove_transport tcc-btn-del">X</button>
-                                <div class="tcc-trans-cost" style="flex: 1 1 100%; text-align:right; font-size:11px; color:#16a34a; font-weight:bold; margin-top:-2px;"></div>
-                            </div>
-                        </div>
+                        <div id="transport-wrapper"></div>
                         <button type="button" id="add_transport" class="tcc-btn-secondary">+ Add Vehicle</button>
                     </div>
                 </div>
@@ -176,16 +217,28 @@ function tcc_render_calculator_form() {
                     <div class="tcc-grid-3">
                         <div class="tcc-form-group">
                             <label>Total Days</label>
-                            <input type="number" name="total_days" id="total_days" value="4" min="1" required>
+                            <div class="tcc-qty-wrapper">
+                                <button type="button" class="tcc-qty-btn minus">-</button>
+                                <input type="number" name="total_days" id="total_days" value="4" min="1" required>
+                                <button type="button" class="tcc-qty-btn plus">+</button>
+                            </div>
                             <small style="font-size:10px; color:#64748b;">Nights: <span id="total_nights_display">3</span></small>
                         </div>
                         <div class="tcc-form-group">
                             <label>Rooms</label>
-                            <input type="number" name="no_of_rooms" id="no_of_rooms" value="1" min="1" required>
+                            <div class="tcc-qty-wrapper">
+                                <button type="button" class="tcc-qty-btn minus">-</button>
+                                <input type="number" name="no_of_rooms" id="no_of_rooms" value="1" min="1" required>
+                                <button type="button" class="tcc-qty-btn plus">+</button>
+                            </div>
                         </div>
                         <div class="tcc-form-group">
                             <label>Extra Beds</label>
-                            <input type="number" name="extra_beds" id="extra_beds" value="0" min="0" required>
+                            <div class="tcc-qty-wrapper">
+                                <button type="button" class="tcc-qty-btn minus">-</button>
+                                <input type="number" name="extra_beds" id="extra_beds" value="0" min="0" required>
+                                <button type="button" class="tcc-qty-btn plus">+</button>
+                            </div>
                         </div>
                     </div>
                     <div class="tcc-form-group">
@@ -196,19 +249,7 @@ function tcc_render_calculator_form() {
 
                 <div class="tcc-card">
                     <div class="tcc-card-title">5. Itinerary Routing (Hotels)</div>
-                    <div id="night-stay-wrapper">
-                        <div class="night-stay-row tcc-repeater-row tcc-fade-in" style="flex-wrap:wrap; gap:5px;">
-                            <select name="stay_place[]" class="stay_place_dropdown" required style="flex:2;"></select>
-                            <select name="stay_category[]" class="stay_cat_dropdown" required style="flex:1.5;"></select>
-                            <div style="flex:3;">
-                                <select class="stay_hotel_dropdown" multiple required style="width:100%; height:55px !important; border:1px solid #ccc; border-radius:3px; padding:2px; font-size:12px; background:#fff; outline:none;"></select>
-                                <input type="hidden" name="stay_hotel[]" class="stay_hotel_hidden">
-                            </div>
-                            <input type="number" name="stay_nights[]" placeholder="Nights" value="1" class="stay_nights" min="1" required style="flex:0.8;">
-                            <button type="button" class="remove_stay_place tcc-btn-del">X</button>
-                            <div class="tcc-hotel-cost" style="flex: 1 1 100%; text-align:right; font-size:11px; color:#16a34a; font-weight:bold; margin-top:-2px;"></div>
-                        </div>
-                    </div>
+                    <div id="night-stay-wrapper"></div>
                     <button type="button" id="add_stay_place" class="tcc-btn-secondary" style="margin-top:5px;">+ Add Location</button>
                 </div>
 
@@ -222,7 +263,7 @@ function tcc_render_calculator_form() {
 
             <div class="tcc-card" style="border-color: #bee3f8; background:#f0f9ff; margin-top:20px;">
                 <div class="tcc-card-title" style="color:#0369a1;">Final Adjustments & Overview</div>
-                
+
                 <div style="background:#e0f2fe; padding:10px; border-radius:4px; border:1px solid #bae6fd; margin-bottom:15px; font-size:12px; color:#0369a1;">
                     <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
                         <span>Total Hotel Cost:</span>
@@ -231,6 +272,10 @@ function tcc_render_calculator_form() {
                     <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
                         <span>Total Cab Cost:</span>
                         <strong id="live_total_trans">₹0.00</strong>
+                    </div>
+                    <div id="live_addons_row" style="display:none; justify-content:space-between; margin-bottom:4px;">
+                        <span>Add-ons Cost:</span>
+                        <strong id="live_total_addons">₹0.00</strong>
                     </div>
                     <div style="display:flex; justify-content:space-between; margin-top:4px; padding-top:4px; border-top:1px dashed #93c5fd; font-weight:bold; color:#075985;">
                         <span>Total Actual Cost:</span>
@@ -289,15 +334,6 @@ function tcc_render_calculator_form() {
                         <span><span id="live_gst_label">GST (<?php echo $global_settings['gst']; ?>%):</span> <span id="live_gst">₹0.00</span></span>
                         <span style="font-weight:900; color:#000; font-size:14px;">Total Value: <span id="live_total">₹0.00</span></span>
                     </div>
-                    
-                    <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:10px;">
-                        <button type="button" id="tcc_quick_wa_btn" class="tcc-btn-secondary" style="flex:1; background:#25D366; color:#fff; border-color:#128C7E; font-size:11px !important;">📱 Summary</button>
-                        <button type="button" id="tcc_copy_itinerary_btn" class="tcc-btn-secondary" style="flex:1; font-size:11px !important; background:#fff;">📋 Itinerary</button>
-                        <button type="button" id="tcc_copy_hotels_btn" class="tcc-btn-secondary" style="flex:1; font-size:11px !important; background:#fff;">🏨 Hotels</button>
-                        <button type="button" id="tcc_copy_inclusions_btn" class="tcc-btn-secondary" style="flex:1; font-size:11px !important; background:#fff;">✅ Inclusions</button>
-                        <button type="button" id="tcc_copy_exclusions_btn" class="tcc-btn-secondary" style="flex:1; font-size:11px !important; background:#fff;">❌ Exclusions</button>
-                        <button type="button" id="tcc_copy_payment_btn" class="tcc-btn-secondary" style="flex:1; font-size:11px !important; background:#fff;">💳 Payments</button>
-                    </div>
 
                     <div style="text-align:center; font-size:10px; color:#d84b6b; margin-top:5px; display:none;" id="live_surcharge_info"></div>
                     <div id="live_error" style="color:#dc3232; font-size:12px; margin-top:5px; display:none; text-align:center;"></div>
@@ -318,6 +354,14 @@ function tcc_render_calculator_form() {
         </div>
 
         <style>
+            .tcc-qty-wrapper { display: flex; align-items: stretch; border: 1px solid #cbd5e1; border-radius: 3px; overflow: hidden; background: #fff; height: 32px; }
+            .tcc-qty-wrapper input[type="number"] { flex: 1; width: 100%; min-width: 30px; text-align: center; border: none !important; border-radius: 0 !important; margin: 0 !important; -moz-appearance: textfield; padding: 4px 2px !important; outline: none; font-size: 13px; box-shadow: none !important; }
+            .tcc-qty-wrapper input[type="number"]::-webkit-inner-spin-button, .tcc-qty-wrapper input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+            .tcc-qty-btn { width: 28px; background: #f1f5f9; border: none; cursor: pointer; font-weight: bold; font-size: 16px; color: #475569; display: flex; align-items: center; justify-content: center; padding: 0; touch-action: manipulation; transition: 0.1s; }
+            .tcc-qty-btn:hover { background: #e2e8f0; color: #0f172a; }
+            .tcc-qty-btn.minus { border-right: 1px solid #cbd5e1; }
+            .tcc-qty-btn.plus { border-left: 1px solid #cbd5e1; }
+
             #tcc-notes-toggle {
                 position: fixed; bottom: 30px; right: 30px; background: #b93b59; color: #fff; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 9999; border: none; padding: 0; outline: none; touch-action: manipulation;
             }

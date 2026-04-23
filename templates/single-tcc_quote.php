@@ -111,7 +111,8 @@ $wa_api_base = !empty($wa_phone) ? "https://wa.me/{$wa_phone}?text=" : "https://
 
 $drop_txt = !empty($d['drop']) ? $d['drop'] : $d['pickup'];
 
-$txt_trip = "*Trip Details*\nStart Date: " . date('d M Y', strtotime($d['start_date'])) . "\nEnd Date: " . date('d M Y', strtotime($d['end_date'])) . "\nDuration: {$d['days']} Days / " . ($d['days'] - 1) . " Nights\nTravelers: {$d['pax']} Adults, {$d['child']} Child\nRooms & Beds: {$d['rooms']} Rooms / {$d['extra_beds']} Extra Beds\nHotel Category: {$d['hotel_cat']}\nTransport: " . strip_tags($d['transport_string']) . " (Pickup: {$d['pickup']} | Drop: {$drop_txt})";
+$child_6_12_disp = isset($d['child_6_12']) ? $d['child_6_12'] : 0;
+$txt_trip = "*Trip Details*\nStart Date: " . date('d M Y', strtotime($d['start_date'])) . "\nEnd Date: " . date('d M Y', strtotime($d['end_date'])) . "\nDuration: {$d['days']} Days / " . ($d['days'] - 1) . " Nights\nTravelers: {$d['pax']} Adults, {$child_6_12_disp} Child (6-12), {$d['child']} Infants\nRooms & Beds: {$d['rooms']} Rooms / {$d['extra_beds']} Extra Beds\nHotel Category: {$d['hotel_cat']}\nTransport: " . strip_tags($d['transport_string']) . " (Pickup: {$d['pickup']} | Drop: {$drop_txt})";
 
 $txt_itin = "*Itinerary Details*\n";
 if(!empty($d['itinerary'])){
@@ -131,14 +132,18 @@ if(!empty($d['itinerary'])){
 $txt_hotels = "*Hotels Selected*\n";
 if(!empty($d['stays'])){
     foreach($d['stays'] as $stay){
-        $opts = [];
-        foreach($stay['options'] as $opt){
-            $str = $opt['name'];
-            if(!empty($opt['link'])) $str .= " (".$opt['link'].")";
-            $opts[] = $str;
+        if($stay['place'] === 'No Hotel Required') {
+            $txt_hotels .= "- No Hotel Required ({$stay['nights']}N)\n";
+        } else {
+            $opts = [];
+            foreach($stay['options'] as $opt){
+                $str = $opt['name'];
+                if(!empty($opt['link'])) $str .= " (".$opt['link'].")";
+                $opts[] = $str;
+            }
+            $catText = !empty($stay['category']) && $stay['category'] !== '-' ? "[{$stay['category']}] " : "";
+            $txt_hotels .= "- {$stay['place']} ({$stay['nights']}N): {$catText}" . implode(' OR ', $opts) . " / Similar\n";
         }
-        $catText = !empty($stay['category']) ? "[{$stay['category']}] " : "";
-        $txt_hotels .= "- {$stay['place']} ({$stay['nights']}N): {$catText}" . implode(' OR ', $opts) . " / Similar\n";
     }
 } else {
     $txt_hotels .= "No hotels selected.\n";
@@ -296,7 +301,7 @@ if ($is_cancelled) {
                 <div class="tcc-detail-item"><span>Start Date</span> <?php echo date('d M Y', strtotime($d['start_date'])); ?></div>
                 <div class="tcc-detail-item"><span>End Date</span> <?php echo date('d M Y', strtotime($d['end_date'])); ?></div>
                 <div class="tcc-detail-item"><span>Duration</span> <?php echo esc_html($d['days']); ?> Days / <?php echo esc_html($d['days'] - 1); ?> Nights</div>
-                <div class="tcc-detail-item"><span>Travelers</span> <?php echo esc_html($d['pax']); ?> Ad, <?php echo esc_html($d['child']); ?> Ch</div>
+                <div class="tcc-detail-item"><span>Travelers</span> <?php echo esc_html($d['pax']); ?> Ad, <?php echo esc_html(isset($d['child_6_12']) ? $d['child_6_12'] : 0); ?> Ch(6-12), <?php echo esc_html($d['child']); ?> Inf</div>
                 <div class="tcc-detail-item"><span>Rooms</span> <?php echo esc_html($d['rooms']); ?> R / <?php echo esc_html($d['extra_beds']); ?> EB</div>
                 <div class="tcc-detail-item"><span>Category</span> <?php echo esc_html($d['hotel_cat']); ?></div>
                 <div class="tcc-detail-item" style="grid-column: 1 / -1;">
@@ -350,15 +355,20 @@ if ($is_cancelled) {
             
             <div class="tcc-hotels-wrapper">
                 <?php foreach($d['stays'] as $stay): 
-                    $formatted_hotels = array();
-                    foreach($stay['options'] as $opt) {
-                        $link = !empty($opt['link']) ? " <a href='".esc_url($opt['link'])."' target='_blank' style='color:#2563eb; text-decoration:underline; font-size:11px;'>(View)</a>" : '';
-                        $formatted_hotels[] = "<strong style='color:#0f172a;'>".esc_html($opt['name'])."</strong>" . $link;
+                    if($stay['place'] === 'No Hotel Required') {
+                        $combined_hotels = "No Room Provided";
+                        $loc_cat = "-";
+                    } else {
+                        $formatted_hotels = array();
+                        foreach($stay['options'] as $opt) {
+                            $link = !empty($opt['link']) ? " <a href='".esc_url($opt['link'])."' target='_blank' style='color:#2563eb; text-decoration:underline; font-size:11px;'>(View)</a>" : '';
+                            $formatted_hotels[] = "<strong style='color:#0f172a;'>".esc_html($opt['name'])."</strong>" . $link;
+                        }
+                        $combined_hotels = implode(' <span style="color:#94a3b8; font-size:11px; font-weight:normal; margin:0 2px;">/</span> ', $formatted_hotels);
+                        if(empty($combined_hotels)) $combined_hotels = "No selection made";
+                        
+                        $loc_cat = isset($stay['category']) && !empty($stay['category']) ? $stay['category'] : $d['hotel_cat'];
                     }
-                    $combined_hotels = implode(' <span style="color:#94a3b8; font-size:11px; font-weight:normal; margin:0 2px;">/</span> ', $formatted_hotels);
-                    if(empty($combined_hotels)) $combined_hotels = "No selection made";
-                    
-                    $loc_cat = isset($stay['category']) && !empty($stay['category']) ? $stay['category'] : $d['hotel_cat'];
                 ?>
                 <div style="border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 15px; background: #fff; font-family: inherit;">
                     <div style="display: flex; padding: 12px 15px; border-bottom: 1px solid #f1f5f9; align-items: center;">
@@ -547,7 +557,7 @@ if ($is_cancelled) {
             </tr>
             <tr>
                 <td style="padding: 8px; background: #f8fafc; font-weight: bold; border: 1px solid #e2e8f0;">Travelers</td>
-                <td style="padding: 8px; border: 1px solid #e2e8f0;"><?php echo esc_html($d['pax']); ?> Adults, <?php echo esc_html($d['child']); ?> Child</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0;"><?php echo esc_html($d['pax']); ?> Adults, <?php echo esc_html($child_6_12_disp); ?> Child (6-12), <?php echo esc_html($d['child']); ?> Infants</td>
                 <td style="padding: 8px; background: #f8fafc; font-weight: bold; border: 1px solid #e2e8f0;">Rooms</td>
                 <td style="padding: 8px; border: 1px solid #e2e8f0;"><?php echo esc_html($d['rooms']); ?> Rooms / <?php echo esc_html($d['extra_beds']); ?> Extra Beds</td>
             </tr>
@@ -589,11 +599,16 @@ if ($is_cancelled) {
             </thead>
             <tbody>
                 <?php foreach($d['stays'] as $stay): 
-                    $formatted_hotels = array();
-                    foreach($stay['options'] as $opt) { $formatted_hotels[] = "<strong>".esc_html($opt['name'])."</strong>"; }
-                    $combined_hotels = implode(' / ', $formatted_hotels);
-                    if(empty($combined_hotels)) $combined_hotels = "No selection made";
-                    $loc_cat = isset($stay['category']) && !empty($stay['category']) ? $stay['category'] : $d['hotel_cat'];
+                    if($stay['place'] === 'No Hotel Required') {
+                        $combined_hotels = "No Room Provided";
+                        $loc_cat = "-";
+                    } else {
+                        $formatted_hotels = array();
+                        foreach($stay['options'] as $opt) { $formatted_hotels[] = "<strong>".esc_html($opt['name'])."</strong>"; }
+                        $combined_hotels = implode(' / ', $formatted_hotels);
+                        if(empty($combined_hotels)) $combined_hotels = "No selection made";
+                        $loc_cat = isset($stay['category']) && !empty($stay['category']) ? $stay['category'] : $d['hotel_cat'];
+                    }
                 ?>
                 <tr class="pdf-avoid-break">
                     <td style="padding: 8px; border: 1px solid #e2e8f0; vertical-align: top;"><strong><?php echo esc_html($stay['place']); ?></strong><br><span style="font-size:10px; color:#b91c1c;"><?php echo esc_html($loc_cat); ?></span></td>

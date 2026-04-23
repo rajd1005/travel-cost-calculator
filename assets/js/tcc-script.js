@@ -25,6 +25,27 @@ jQuery(document).ready(function($) {
     
     updateStepView(); // Initialize step view
 
+    // --- NEW: Quantity Button Action Logic ---
+    $(document).on('click', '.tcc-qty-btn', function() {
+        let $wrapper = $(this).closest('.tcc-qty-wrapper');
+        let $input = $wrapper.find('input[type="number"]');
+        let val = parseInt($input.val());
+        let min = parseInt($input.attr('min'));
+        
+        if (isNaN(min)) min = 0;
+        if (isNaN(val)) val = min > 0 ? min - 1 : 0; 
+
+        if ($(this).hasClass('plus')) {
+            $input.val(val + 1);
+        } else if ($(this).hasClass('minus')) {
+            if (val > min) {
+                $input.val(val - 1);
+            }
+        }
+        $input.trigger('input'); 
+    });
+
+
     // STEP 1 MUTUALLY EXCLUSIVE ACCORDIONS
     $('.tcc-step-accordion-header').on('click', function() {
         let $body = $(this).next('.tcc-step-accordion-body');
@@ -65,10 +86,15 @@ jQuery(document).ready(function($) {
         }
 
         if(optionsArray && Array.isArray(optionsArray) && optionsArray.length > 0) {
+            let isSpecial = $el.is('#calc_pickup, #calc_drop, .transport_dropdown, .transport_pickup_dropdown');
+            if(isSpecial) $el.append('<option value="">-- Select --</option>');
+
             $.each(optionsArray, function(i, val) { $el.append($('<option></option>').val(val).text(val)); });
             
             if(currentVal && $el.find("option[value='" + currentVal + "']").length) {
                 $el.val(currentVal);
+            } else if(isSpecial) {
+                $el.val('');
             } else {
                 $el.prop('selectedIndex', 0); 
             }
@@ -99,9 +125,14 @@ jQuery(document).ready(function($) {
             populateDropdown('#calc_drop', tccMasterData[dest].pickups); 
             populateDropdown('#calc_hotel_cat', tccMasterData[dest].hotel_categories);
             
-            $('.stay_place_dropdown').each(function() { populateDropdown(this, tccMasterData[dest].stay_places); });
+            $('.stay_place_dropdown').each(function() { 
+                populateDropdown(this, tccMasterData[dest].stay_places); 
+                $(this).prepend('<option value="No Hotel">No Hotel Required</option>'); 
+                $(this).prepend('<option value="" selected>-- Select --</option>'); 
+            });
             $('.stay_cat_dropdown').each(function() { populateDropdown(this, tccMasterData[dest].hotel_categories); });
             $('.transport_dropdown').each(function() { populateDropdown(this, tccMasterData[dest].vehicles); });
+            $('.transport_pickup_dropdown').each(function() { populateDropdown(this, tccMasterData[dest].pickups); });
             
             setTimeout(function() { $('.night-stay-row').each(function() { updateRowHotels($(this)); }); }, 100);
         }
@@ -112,8 +143,20 @@ jQuery(document).ready(function($) {
         let cat = $row.find('.stay_cat_dropdown').val(); 
         let place = $row.find('.stay_place_dropdown').val();
         let $hotelDrop = $row.find('.stay_hotel_dropdown');
+        let $catDrop = $row.find('.stay_cat_dropdown');
         let $hiddenInput = $row.find('.stay_hotel_hidden');
         let preValue = $hiddenInput.val(); 
+
+        if (place === 'No Hotel') {
+            $catDrop.prop('disabled', true).val('');
+            $hotelDrop.empty().append('<option value="None" selected>No Room Provided</option>').prop('disabled', true);
+            $hiddenInput.val('None');
+            triggerLiveCalculation();
+            return;
+        } else {
+            $catDrop.prop('disabled', false);
+            $hotelDrop.prop('disabled', false);
+        }
 
         if(dest && cat && place) {
             $hotelDrop.html('<option value="">Loading...</option>');
@@ -126,10 +169,9 @@ jQuery(document).ready(function($) {
                         $hotelDrop.append(`<option value="${hName}" data-link="${hLink}">${hName}</option>`); 
                     });
                     
-                    if(preValue) {
+                    if(preValue && preValue !== 'None') {
                         $hotelDrop.val(preValue.split(','));
                     } else {
-                        // Res.data can be array of objects now
                         let firstVal = typeof res.data[0] === 'object' ? res.data[0].hotel_name : res.data[0];
                         $hotelDrop.val([firstVal]); 
                     }
@@ -162,11 +204,10 @@ jQuery(document).ready(function($) {
         $('.night-stay-row').each(function() { updateRowHotels($(this)); }); 
     });
 
-    $('#total_pax, #child_pax').on('input', function() {
+    $('#total_pax, #child_pax, #child_6_12_pax').on('input', function() {
         let pax = parseInt($('#total_pax').val()) || 0;
-        let child = parseInt($('#child_pax').val()) || 0;
 
-        let rooms = Math.max(Math.ceil(pax / 3), child);
+        let rooms = Math.ceil(pax / 3);
         if(rooms < 1) rooms = 1;
         let baseAdultCap = rooms * 2;
         let extraBeds = pax > baseAdultCap ? pax - baseAdultCap : 0;
@@ -174,45 +215,29 @@ jQuery(document).ready(function($) {
         $('#no_of_rooms').val(rooms);
         $('#extra_beds').val(extraBeds);
 
-        triggerAutoTransportOptimization();
+        triggerLiveCalculation();
     });
 
     $('#calc_pickup').on('change', function() { 
         $('#calc_drop').val($(this).val()); 
-        triggerAutoTransportOptimization(); 
+        let mainPick = $(this).val();
+        if(mainPick) {
+            $('.transport_pickup_dropdown').each(function() {
+                if(!$(this).val()) $(this).val(mainPick);
+            });
+        }
+        triggerLiveCalculation(); 
     });
 
-    let transportTimeout;
-    function triggerAutoTransportOptimization() {
-        clearTimeout(transportTimeout);
-        transportTimeout = setTimeout(function() {
-            let dest = $('#calc_destination').val();
-            let pickup = $('#calc_pickup').val();
-            let pax = parseInt($('#total_pax').val()) || 0;
-            
-            if (!pickup && typeof tccMasterData !== 'undefined' && tccMasterData[dest] && tccMasterData[dest].pickups && tccMasterData[dest].pickups.length > 0) {
-                pickup = tccMasterData[dest].pickups[0];
-            }
-
-            if(!dest || !pickup || pax <= 0) return;
-
-            $.post(tcc_ajax_obj.ajax_url, {
-                action: 'tcc_optimize_transport', destination: dest, pickup_location: pickup, total_pax: pax
-            }, function(res) {
-                if(res.success && res.data.length > 0) {
-                    $('#transport-wrapper .transport-row').remove(); 
-                    $.each(res.data, function(i, item) { addTransportRow(item.vehicle, item.qty); });
-                    triggerLiveCalculation();
-                } else {
-                    triggerLiveCalculation();
-                }
-            });
-        }, 50); 
-    }
-
-    function addTransportRow(vehicleName = '', qty = 1) {
+    function addTransportRow(vehicleName = '', qty = '', tDays = null, pickupName = '', customRate = '', customTotal = '') {
+        if (tDays === null) tDays = $('#total_days').val() || 1;
+        let safeCustomRate = (customRate !== null && customRate !== undefined) ? customRate : '';
+        let safeCustomTotal = (customTotal !== null && customTotal !== undefined) ? customTotal : '';
+        
         let dest = $('#calc_destination').val();
-        let optionsHtml = '';
+        let optionsHtml = '<option value="">-- Vehicle --</option>';
+        let pickupOptionsHtml = '<option value="">-- City --</option>'; 
+        
         if(typeof tccMasterData !== 'undefined' && tccMasterData[dest]) {
             let vehs = tccMasterData[dest].vehicles;
             if(typeof vehs === 'string') vehs = vehs.split(',').map(s=>s.trim());
@@ -222,12 +247,37 @@ jQuery(document).ready(function($) {
                     optionsHtml += `<option value="${val}" ${sel}>${val}</option>`;
                 });
             }
+            
+            let pickups = tccMasterData[dest].pickups;
+            if(typeof pickups === 'string') pickups = pickups.split(',').map(s=>s.trim());
+            if(Array.isArray(pickups)) {
+                $.each(pickups, function(i, val) {
+                    let sel = (val === pickupName) ? 'selected' : '';
+                    pickupOptionsHtml += `<option value="${val}" ${sel}>${val}</option>`;
+                });
+            }
         }
+        
         let row = `
-        <div class="transport-row tcc-repeater-row tcc-fade-in" style="flex-wrap:wrap;">
-            <select name="transportation[]" class="transport_dropdown" required style="flex:3;">${optionsHtml}</select>
-            <input type="number" name="transport_qty[]" value="${qty}" min="1" placeholder="Qty" required style="flex:1;">
-            <button type="button" class="remove_transport tcc-btn-del">X</button>
+        <div class="transport-row tcc-repeater-row tcc-fade-in" style="flex-wrap:wrap; gap:4px;">
+            <select name="transport_pickup[]" class="transport_pickup_dropdown" required style="flex:1.5; height:32px;" title="Pickup City">${pickupOptionsHtml}</select>
+            <select name="transportation[]" class="transport_dropdown" required style="flex:2; height:32px;">${optionsHtml}</select>
+            
+            <div class="tcc-qty-wrapper" style="flex:0.7;" title="Qty">
+                <button type="button" class="tcc-qty-btn minus">-</button>
+                <input type="number" name="transport_qty[]" value="${qty}" min="1" placeholder="Qty" required>
+                <button type="button" class="tcc-qty-btn plus">+</button>
+            </div>
+            
+            <div class="tcc-qty-wrapper" style="flex:0.7;" title="No. of Days">
+                <button type="button" class="tcc-qty-btn minus">-</button>
+                <input type="number" name="transport_days[]" value="${tDays}" min="1" placeholder="Days" required>
+                <button type="button" class="tcc-qty-btn plus">+</button>
+            </div>
+
+            <input type="number" name="transport_custom_rate[]" value="${safeCustomRate}" step="0.01" min="0" placeholder="Rate/Day (₹)" style="flex:1.2; height:32px;" title="Custom Cab Rate per Day (Optional)">
+            <input type="number" name="transport_custom_total[]" value="${safeCustomTotal}" step="0.01" min="0" placeholder="Total Cost (₹)" style="flex:1.2; height:32px;" title="Custom Absolute Total Cab Cost (Optional)">
+            <button type="button" class="remove_transport tcc-btn-del" style="height:32px;">X</button>
             <div class="tcc-trans-cost" style="flex: 1 1 100%; text-align:right; font-size:11px; color:#16a34a; font-weight:bold; margin-top:-2px;"></div>
         </div>`;
         $('#transport-wrapper').append(row);
@@ -236,16 +286,188 @@ jQuery(document).ready(function($) {
     $('#add_transport').on('click', function() { addTransportRow(); triggerLiveCalculation(); });
     $(document).on('click', '.remove_transport', function() { $(this).closest('.transport-row').remove(); triggerLiveCalculation(); });
 
+    // --- ADDONS LOGIC ---
+    function addAddonRow(name = '', price = '', type = 'flat') {
+        let row = `
+        <div class="addon-row tcc-repeater-row tcc-fade-in" style="display:flex; gap:5px; margin-bottom:5px;">
+            <input type="text" name="addon_name[]" class="addon-name" value="${name}" placeholder="Addon Name (e.g. Bonfire)" style="flex:2;" required>
+            <select name="addon_type[]" class="addon-type" style="flex:1; padding:4px; font-size:12px; border:1px solid #ccc; border-radius:3px;">
+                <option value="flat" ${type === 'flat' ? 'selected' : ''}>Flat Total</option>
+                <option value="per_person" ${type === 'per_person' ? 'selected' : ''}>Per Person</option>
+            </select>
+            <input type="number" name="addon_price[]" class="addon-price" value="${price}" min="0" step="0.01" placeholder="Cost (₹)" style="flex:1;" required>
+            <button type="button" class="save_addon_row tcc-btn-secondary" style="padding:4px 8px; margin:0; font-size:11px;" title="Save to Library">💾</button>
+            <button type="button" class="remove_addon tcc-btn-del" style="margin:0;">X</button>
+        </div>`;
+        $('#addons-wrapper').append(row);
+    }
+
+    $('#add_addon_btn').on('click', function() { addAddonRow(); triggerLiveCalculation(); });
+    $(document).on('click', '.remove_addon', function() { $(this).closest('.addon-row').remove(); triggerLiveCalculation(); });
+
+    // --- INDIVIDUAL ADDON PRESETS LOGIC ---
+    function loadAddonPresets() {
+        let dest = $('#calc_destination').val();
+        let $select = $('#addon_preset_select');
+        
+        $select.html('<option value="">-- Saved Add-ons --</option>');
+        $('#insert_addon_preset, #delete_addon_preset').hide();
+        
+        if(!dest) return;
+        
+        $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_load_addon_presets', destination: dest }, function(res) {
+            if(res.success && res.data) {
+                let pData = res.data;
+                // Double check it clears correctly before injecting
+                $select.html('<option value="">-- Saved Add-ons --</option>');
+                
+                if(Object.keys(pData).length > 0) {
+                    $select.data('presets', pData);
+                    $.each(pData, function(presetName, dataObj) {
+                        $select.append(`<option value="${presetName}">${presetName}</option>`);
+                    });
+                }
+            }
+        });
+    }
+
+    $('#addon_preset_select').on('change', function() {
+        if($(this).val()) {
+            $('#insert_addon_preset, #delete_addon_preset').show();
+        } else {
+            $('#insert_addon_preset, #delete_addon_preset').hide();
+        }
+    });
+
+    $('#insert_addon_preset').on('click', function() {
+        let presetName = $('#addon_preset_select').val();
+        let presets = $('#addon_preset_select').data('presets');
+        if(presetName && presets && presets[presetName]) {
+            let p = presets[presetName];
+            addAddonRow(presetName, p.price || 0, p.type || 'flat');
+            triggerLiveCalculation();
+            
+            // Reset dropdown
+            $('#addon_preset_select').val('').trigger('change');
+        }
+    });
+
+    // Save individual row to Library
+    $(document).on('click', '.save_addon_row', function() {
+        let row = $(this).closest('.addon-row');
+        let name = row.find('.addon-name').val().trim();
+        let type = row.find('.addon-type').val();
+        let price = row.find('.addon-price').val();
+        let dest = $('#calc_destination').val();
+        
+        if(!name || !dest) return alert("Enter Add-on Name and select Destination first.");
+        if(!price) price = 0;
+        
+        let btn = $(this);
+        let oldText = btn.text();
+        btn.text('...');
+        
+        $.post(tcc_ajax_obj.ajax_url, {
+            action: 'tcc_save_addon_preset',
+            destination: dest,
+            preset_name: name,
+            addon_type: type,
+            addon_price: price
+        }, function(res) {
+            btn.text(oldText);
+            if(res.success) {
+                $('#addon_preset_msg').text("Saved '" + name + "' to Library!").show().delay(2000).fadeOut();
+                loadAddonPresets();
+            } else {
+                alert("Error saving Add-on.");
+            }
+        });
+    });
+
+    $('#delete_addon_preset').on('click', function() {
+        let presetName = $('#addon_preset_select').val();
+        let dest = $('#calc_destination').val();
+        if(!presetName || !dest) return;
+        if(!confirm("Are you sure you want to permanently delete '" + presetName + "' from your Library?")) return;
+
+        $.post(tcc_ajax_obj.ajax_url, {
+            action: 'tcc_delete_addon_preset',
+            preset_name: presetName,
+            destination: dest
+        }, function(res) {
+            if(res.success) {
+                $('#addon_preset_msg').text("Deleted successfully!").css('color', '#dc2626').fadeIn().delay(2000).fadeOut();
+                loadAddonPresets();
+            } else {
+                alert("Error deleting preset.");
+            }
+        });
+    });
+
+    // --- ITINERARY PRESETS LOGIC ---
+    function loadPresets() {
+        let dest = $('#calc_destination').val();
+        let $select = $('#itinerary_preset_select');
+        $select.html('<option value="">-- Load Preset --</option>');
+        $('#delete_itinerary_preset').hide();
+        if(!dest) return;
+        
+        $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_load_itinerary_presets', destination: dest }, function(res) {
+            try {
+                if(res.success && res.data) {
+                    let pData = res.data;
+                    if(typeof pData === 'string') { pData = JSON.parse(pData); }
+                    
+                    // FIX: Clear the dropdown strictly before rendering to prevent duplicates
+                    $select.html('<option value="">-- Load Preset --</option>');
+
+                    if(Object.keys(pData).length > 0) {
+                        $select.data('presets', pData);
+                        $.each(pData, function(presetName, dataObj) {
+                            let daysLen = 0;
+                            if (Array.isArray(dataObj)) {
+                                daysLen = dataObj.length;
+                            } else if (dataObj && dataObj.itinerary !== undefined) {
+                                if(Array.isArray(dataObj.itinerary)) {
+                                    daysLen = dataObj.itinerary.length;
+                                } else if(typeof dataObj.itinerary === 'object' && dataObj.itinerary !== null) {
+                                    daysLen = Object.keys(dataObj.itinerary).length;
+                                }
+                            } else if (dataObj && typeof dataObj === 'object') {
+                                daysLen = Object.keys(dataObj).length;
+                            }
+                            $select.append(`<option value="${presetName}">${presetName} (${daysLen} Days)</option>`);
+                        });
+                    }
+                }
+            } catch(e) { console.error("Error loading presets: ", e); }
+        });
+    }
+
+    $('#total_days').data('prev-days', parseInt($('#total_days').val()) || 1);
+
     $('#total_days').on('input', function() {
         let days = parseInt($(this).val()) || 0;
+        let prevDays = parseInt($(this).data('prev-days')) || days;
+        
         $('#total_nights_display').text(days > 0 ? days - 1 : 0);
+
+        $('input[name="transport_days[]"]').each(function() {
+            let currentVal = parseInt($(this).val());
+            if(isNaN(currentVal) || currentVal === prevDays) {
+                $(this).val(days);
+            }
+        });
+        
+        $(this).data('prev-days', days);
+
         triggerLiveCalculation();
     });
 
     function addStayRow(placeName = '', catVal = '', hotelVal = '', nights = 1) {
         let dest = $('#calc_destination').val();
         
-        let placeOptionsHtml = '';
+        let placeOptionsHtml = '<option value="No Hotel"' + (placeName === 'No Hotel' ? ' selected' : '') + '>No Hotel Required</option>';
         let catOptionsHtml = '';
         
         if(typeof tccMasterData !== 'undefined' && tccMasterData[dest]) {
@@ -281,8 +503,14 @@ jQuery(document).ready(function($) {
                 <select class="stay_hotel_dropdown" multiple required style="width:100%; height:55px !important; border:1px solid #ccc; border-radius:3px; padding:2px; font-size:12px; background:#fff; outline:none;"></select>
                 <input type="hidden" name="stay_hotel[]" class="stay_hotel_hidden" value="${hotelVal}">
             </div>
-            <input type="number" name="stay_nights[]" placeholder="Nights" value="${nights}" class="stay_nights" min="1" required style="flex:0.8;">
-            <button type="button" class="remove_stay_place tcc-btn-del">X</button>
+            
+            <div class="tcc-qty-wrapper" style="flex:0.8;" title="Nights">
+                <button type="button" class="tcc-qty-btn minus">-</button>
+                <input type="number" name="stay_nights[]" placeholder="Nights" value="${nights}" class="stay_nights" min="1" required>
+                <button type="button" class="tcc-qty-btn plus">+</button>
+            </div>
+
+            <button type="button" class="remove_stay_place tcc-btn-del" style="height:32px; margin-top:0;">X</button>
             <div class="tcc-hotel-cost" style="flex: 1 1 100%; text-align:right; font-size:11px; color:#16a34a; font-weight:bold; margin-top:-2px;"></div>
         </div>`;
         let $newRow = $(row);
@@ -297,19 +525,38 @@ jQuery(document).ready(function($) {
         let pax = parseInt($('#total_pax').val());
         if (isNaN(pax) || pax <= 0) return "Enter No. of Adults.";
         
-        let child = parseInt($('#child_pax').val()) || 0;
         let rooms = parseInt($('#no_of_rooms').val()) || 0;
         let extra_beds = parseInt($('#extra_beds').val()) || 0;
         let total_days = parseInt($('#total_days').val()) || 0;
         let expected_nights = total_days > 0 ? total_days - 1 : 0;
 
         if (extra_beds > rooms) return "Max 1 Extra Bed/room.";
-        if (child > rooms) return "Max 1 Child (<6yr)/room.";
         if ((rooms * 2) + extra_beds < pax) return `Not enough beds for ${pax} Adults.`;
 
         let sum_nights = 0;
         $('.stay_nights').each(function() { sum_nights += parseInt($(this).val()) || 0; });
         if (sum_nights !== expected_nights) return `Nights (${sum_nights}) must equal ${expected_nights}.`;
+
+        if (!$('#calc_pickup').val() || !$('#calc_drop').val()) return "Select Pickup and Drop locations.";
+
+        let transValid = true;
+        $('.transport_pickup_dropdown').each(function(){ if(!$(this).val()) transValid = false; });
+        $('.transport_dropdown').each(function(){ if(!$(this).val()) transValid = false; });
+        $('input[name="transport_qty[]"]').each(function(){ let v = parseInt($(this).val()); if(isNaN(v) || v <= 0) transValid = false; });
+        $('input[name="transport_days[]"]').each(function(){ let v = parseInt($(this).val()); if(isNaN(v) || v <= 0) transValid = false; });
+        
+        $('input[name="transport_custom_rate[]"]').each(function(){ 
+            if($(this).val() !== '') { let v = parseFloat($(this).val()); if(isNaN(v) || v < 0) transValid = false; }
+        });
+        $('input[name="transport_custom_total[]"]').each(function(){ 
+            if($(this).val() !== '') { let v = parseFloat($(this).val()); if(isNaN(v) || v < 0) transValid = false; }
+        });
+        if(!transValid) return "Select City, Vehicle, Qty, Days, and valid Rate/Total.";
+
+        let addonValid = true;
+        $('.addon-name').each(function(){ if(!$(this).val().trim()) addonValid = false; });
+        $('.addon-price').each(function(){ let v = parseFloat($(this).val()); if(isNaN(v) || v < 0) addonValid = false; });
+        if(!addonValid) return "Enter valid Add-on name and cost.";
 
         return null; 
     }
@@ -317,12 +564,12 @@ jQuery(document).ready(function($) {
     let liveCalcTimeout;
     $('#tcc-calc-form').on('input change', 'input, select', function(e) {
         if(e.target.id === 'tcc_calculate_btn' || e.target.id === 'client_name' || e.target.id === 'client_phone' || e.target.id === 'client_email' || e.target.id === 'calc_edit_quote_select' || e.target.id === 'calc_quote_search') return;
-        if(e.target.id !== 'total_pax' && e.target.id !== 'child_pax' && e.target.id !== 'calc_pickup') {
+        if(e.target.id !== 'total_pax' && e.target.id !== 'child_pax' && e.target.id !== 'child_6_12_pax' && e.target.id !== 'calc_pickup') {
             triggerLiveCalculation();
         }
     });
 
-    window.tccLiveSummaryData = null; // Store for copy buttons
+    window.tccLiveSummaryData = null; 
 
     function triggerLiveCalculation() {
         $('#live_error').hide();
@@ -332,6 +579,7 @@ jQuery(document).ready(function($) {
         let validationError = validateCalculator();
         if (validationError) {
             $('#live_pp_base, #live_pp_inc, #live_profit, #live_discount, #live_total, #live_gst, #live_actual_cost, #live_total_hotel, #live_total_trans, #live_total_base').text('₹0.00').css('opacity', '1');
+            $('#live_addons_row').hide();
             $('.tcc-trans-cost, .tcc-hotel-cost').text('');
             $('#live_error').html(validationError).show();
             return;
@@ -356,7 +604,7 @@ jQuery(document).ready(function($) {
                 $('#live_pp_base, #live_pp_inc, #live_profit, #live_discount, #live_total, #live_gst').css('opacity', '1');
                 if(res.success) {
                     let d = res.data;
-                    window.tccLiveSummaryData = d.summary_data; // Cache for buttons
+                    window.tccLiveSummaryData = d.summary_data; 
                     
                     $('#live_pp_base').text(formatINR(d.summary_data.per_person_excl_gst));
                     $('#live_pp_inc').text(formatINR(d.summary_data.per_person_with_gst));
@@ -368,6 +616,14 @@ jQuery(document).ready(function($) {
 
                     $('#live_total_hotel').text(formatINR(d.summary_data.total_hotel_cost));
                     $('#live_total_trans').text(formatINR(d.summary_data.total_trans_cost));
+                    
+                    if (d.summary_data.total_addon_cost > 0) {
+                        $('#live_addons_row').css('display', 'flex');
+                        $('#live_total_addons').text(formatINR(d.summary_data.total_addon_cost));
+                    } else {
+                        $('#live_addons_row').hide();
+                    }
+
                     $('#live_actual_cost').text(formatINR(d.summary_data.actual_cost));
 
                     $('#live_profit').text(formatINR(d.summary_data.net_profit));
@@ -399,19 +655,11 @@ jQuery(document).ready(function($) {
                         }
                     });
 
-                    if (d.summary_data.corrected_trans_qtys) {
-                        $('.transport-row').each(function(index) {
-                            let $qtyInput = $(this).find('input[name="transport_qty[]"]');
-                            if (d.summary_data.corrected_trans_qtys[index] !== undefined && !$qtyInput.is(':focus')) {
-                                $qtyInput.val(d.summary_data.corrected_trans_qtys[index]);
-                            }
-                        });
-                    }
-
                     $('#live_error').hide();
                 } else {
                     $('#live_pp_base, #live_pp_inc, #live_profit, #live_gross_profit, #live_pt, #live_pg, #live_discount, #live_total, #live_gst, #live_total_base').text('₹0.00');
                     $('#live_total_hotel, #live_total_trans, #live_actual_cost').text('₹0.00');
+                    $('#live_addons_row').hide();
                     $('.tcc-trans-cost, .tcc-hotel-cost').text('');
                     $('#live_error').html(res.data.errors).show();
                 }
@@ -490,16 +738,20 @@ jQuery(document).ready(function($) {
         let msg = `*Hotels Selected*\n`;
         if (stays && stays.length > 0) {
             stays.forEach(stay => {
-                let cat = stay.category || '';
-                let stars = cat.toLowerCase().includes('4') ? '⭐⭐⭐⭐' : (cat.toLowerCase().includes('5') ? '⭐⭐⭐⭐⭐' : '⭐⭐⭐');
-                msg += `${stars} ${stay.place} (${stay.nights}N): [${cat}]\n`;
-                if (stay.options && stay.options.length > 0) {
-                    stay.options.forEach(opt => {
-                        let linkStr = opt.link ? ` [${opt.link}]` : '';
-                        msg += `${opt.name}${linkStr}\n`;
-                    });
+                if(stay.place === 'No Hotel Required') {
+                    msg += `No Hotel Required (${stay.nights}N)\n`;
                 } else {
-                    msg += `None selected\n`;
+                    let cat = stay.category || '';
+                    let stars = cat.toLowerCase().includes('4') ? '⭐⭐⭐⭐' : (cat.toLowerCase().includes('5') ? '⭐⭐⭐⭐⭐' : '⭐⭐⭐');
+                    msg += `${stars} ${stay.place} (${stay.nights}N): [${cat}]\n`;
+                    if (stay.options && stay.options.length > 0) {
+                        stay.options.forEach(opt => {
+                            let linkStr = opt.link ? ` [${opt.link}]` : '';
+                            msg += `${opt.name}${linkStr}\n`;
+                        });
+                    } else {
+                        msg += `None selected\n`;
+                    }
                 }
             });
         } else {
@@ -538,12 +790,24 @@ jQuery(document).ready(function($) {
             });
 
             if (place && nights) {
+                if(place === 'No Hotel') place = 'No Hotel Required';
                 stays.push({place: place, category: cat, nights: nights, options: opts});
             }
         });
 
+        let inclusions = master.inclusions || '';
+        let addonsText = [];
+        $('#addons-wrapper .addon-row').each(function() {
+            let name = $(this).find('.addon-name').val();
+            if(name && name.trim() !== '') addonsText.push(name.trim());
+        });
+        if(addonsText.length > 0) {
+            if (inclusions !== '') inclusions += '\n';
+            inclusions += addonsText.join('\n');
+        }
+
         return {
-            inclusions: master.inclusions || '',
+            inclusions: inclusions,
             exclusions: master.exclusions || '',
             payment_terms: master.payment_terms || '',
             itinerary: itinerary,
@@ -562,7 +826,7 @@ jQuery(document).ready(function($) {
         let gstPct = (typeof tccGlobalSettings !== 'undefined' && tccGlobalSettings.gst) ? tccGlobalSettings.gst : 5;
 
         let msg = `Soulful Tour & Travels (Soulful Pathfinder)\nGSTIN: 19AXIPD7432L1Z5\n\n`;
-        msg += `Travelers: ${d.pax} Adults, ${d.child} Children\n\n`;
+        msg += `Travelers: ${d.pax} Adults, ${d.child_6_12 || 0} Child (6-12), ${d.child} Infant\n\n`;
         msg += `Inclusions:\n`;
         msg += `🏨 Room: ${d.rooms} Room${d.rooms > 1 ? 's' : ''} + ${d.extra_beds} Extra Bed${d.extra_beds > 1 ? 's' : ''}\n`;
         msg += `🚗 Vehicle: ${d.transport_string}\n\n`;
@@ -580,7 +844,7 @@ jQuery(document).ready(function($) {
         let msg = `*Itinerary Details*\n`;
         d.itinerary.forEach((day_text, idx) => {
             let stay = (d.itinerary_stay_places && d.itinerary_stay_places[idx]) ? d.itinerary_stay_places[idx] : '';
-            let stay_suffix = stay ? ` n/s-${stay}` : '';
+            let stay_suffix = (stay && stay !== 'No Hotel') ? ` n/s-${stay}` : '';
             msg += `👉Day ${idx + 1}: ${day_text}${stay_suffix}\n`;
         });
 
@@ -655,7 +919,7 @@ jQuery(document).ready(function($) {
             msg += `*Trip Date:* ${formatDate(d.start_date)} to ${formatDate(d.end_date)}\n`;
         }
         msg += `*Duration:* ${d.days} Days / ${d.days > 0 ? d.days - 1 : 0} Nights\n`;
-        msg += `*Travelers:* ${d.pax} Adults, ${d.child} Child\n`;
+        msg += `*Travelers:* ${d.pax} Adults, ${d.child_6_12 || 0} Child (6-12), ${d.child} Infant\n`;
         msg += `*Rooms & Beds:* ${d.rooms} Rooms / ${d.extra_beds} Extra Beds\n`;
         msg += `*Transport:* ${d.transport_string} (Pickup: ${d.pickup} | Drop: ${drop_txt})\n\n`;
         
@@ -754,6 +1018,7 @@ jQuery(document).ready(function($) {
 
         let dest = $('#calc_destination').val();
         let stayOptions = '<option value="">-- Night Stay --</option>';
+        stayOptions += '<option value="No Hotel">No Hotel Required</option>';
         if(typeof tccMasterData !== 'undefined' && tccMasterData[dest]) {
             let stays = tccMasterData[dest].stay_places;
             if(typeof stays === 'string') stays = stays.split(',').map(s=>s.trim());
@@ -810,47 +1075,15 @@ jQuery(document).ready(function($) {
     $('#calc_destination').on('change', function() { 
         updateCalculatorDropdowns(); 
         loadPresets(); 
+        loadAddonPresets();
         generateDayInputs(); 
-        triggerAutoTransportOptimization(); 
+        triggerLiveCalculation(); 
     });
     
-    setTimeout(generateDayInputs, 500);
-
-    function loadPresets() {
-        let dest = $('#calc_destination').val();
-        let $select = $('#itinerary_preset_select');
-        $select.html('<option value="">-- Load Preset --</option>');
-        $('#delete_itinerary_preset').hide();
-        if(!dest) return;
-        
-        $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_load_itinerary_presets', destination: dest }, function(res) {
-            try {
-                if(res.success && res.data) {
-                    let pData = res.data;
-                    if(typeof pData === 'string') { pData = JSON.parse(pData); }
-                    
-                    if(Object.keys(pData).length > 0) {
-                        $select.data('presets', pData);
-                        $.each(pData, function(presetName, dataObj) {
-                            let daysLen = 0;
-                            if (Array.isArray(dataObj)) {
-                                daysLen = dataObj.length;
-                            } else if (dataObj && dataObj.itinerary !== undefined) {
-                                if(Array.isArray(dataObj.itinerary)) {
-                                    daysLen = dataObj.itinerary.length;
-                                } else if(typeof dataObj.itinerary === 'object' && dataObj.itinerary !== null) {
-                                    daysLen = Object.keys(dataObj.itinerary).length;
-                                }
-                            } else if (dataObj && typeof dataObj === 'object') {
-                                daysLen = Object.keys(dataObj).length;
-                            }
-                            $select.append(`<option value="${presetName}">${presetName} (${daysLen} Days)</option>`);
-                        });
-                    }
-                }
-            } catch(e) { console.error("Error loading presets: ", e); }
-        });
-    }
+    setTimeout(() => {
+        generateDayInputs();
+        loadAddonPresets();
+    }, 500);
 
     $('#itinerary_preset_select').on('change', function() {
         let presetName = $(this).val();
@@ -907,6 +1140,47 @@ jQuery(document).ready(function($) {
         }
     });
 
+    function loadPresets() {
+        let dest = $('#calc_destination').val();
+        let $select = $('#itinerary_preset_select');
+        
+        $select.html('<option value="">-- Load Preset --</option>');
+        $('#delete_itinerary_preset').hide();
+        
+        if(!dest) return;
+        
+        $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_load_itinerary_presets', destination: dest }, function(res) {
+            try {
+                if(res.success && res.data) {
+                    let pData = res.data;
+                    if(typeof pData === 'string') { pData = JSON.parse(pData); }
+                    
+                    // FIX: Double clear to guarantee no duplicates
+                    $select.html('<option value="">-- Load Preset --</option>');
+
+                    if(Object.keys(pData).length > 0) {
+                        $select.data('presets', pData);
+                        $.each(pData, function(presetName, dataObj) {
+                            let daysLen = 0;
+                            if (Array.isArray(dataObj)) {
+                                daysLen = dataObj.length;
+                            } else if (dataObj && dataObj.itinerary !== undefined) {
+                                if(Array.isArray(dataObj.itinerary)) {
+                                    daysLen = dataObj.itinerary.length;
+                                } else if(typeof dataObj.itinerary === 'object' && dataObj.itinerary !== null) {
+                                    daysLen = Object.keys(dataObj.itinerary).length;
+                                }
+                            } else if (dataObj && typeof dataObj === 'object') {
+                                daysLen = Object.keys(dataObj).length;
+                            }
+                            $select.append(`<option value="${presetName}">${presetName} (${daysLen} Days)</option>`);
+                        });
+                    }
+                }
+            } catch(e) { console.error("Error loading presets: ", e); }
+        });
+    }
+
     $('#new_preset_name').on('input', function() {
         if($(this).val() !== $('#itinerary_preset_select').val()) $('#save_itinerary_preset').text('Save as Preset');
         else $('#save_itinerary_preset').text('Update Preset');
@@ -933,7 +1207,6 @@ jQuery(document).ready(function($) {
         });
     });
 
-    // FIXED DELETE PRESET LOGIC
     $('#delete_itinerary_preset').on('click', function() {
         let presetName = $('#itinerary_preset_select').val();
         let dest = $('#calc_destination').val();
@@ -942,7 +1215,7 @@ jQuery(document).ready(function($) {
 
         $.post(tcc_ajax_obj.ajax_url, {
             action: 'tcc_delete_itinerary_preset',
-            preset_name: presetName,
+            presetName: presetName,
             destination: dest
         }, function(res) {
             if(res.success) {
@@ -1018,8 +1291,10 @@ jQuery(document).ready(function($) {
             $('#tcc_calculate_btn').text('Generate Quote Link');
             $('#transport-wrapper').empty();
             $('#night-stay-wrapper').empty();
+            $('#addons-wrapper').empty();
             
             addStayRow(); 
+            addTransportRow(); 
             
             $('#day-wise-wrapper').empty();
             $('#live_error').hide();
@@ -1045,7 +1320,8 @@ jQuery(document).ready(function($) {
                     $('#start_date').val(d.start_date);
                     $('#total_pax').val(d.pax);
                     $('#child_pax').val(d.child);
-                    $('#total_days').val(d.days);
+                    $('#child_6_12_pax').val(d.child_6_12 || 0);
+                    $('#total_days').val(d.days).data('prev-days', d.days);
                     $('#no_of_rooms').val(d.rooms);
                     $('#extra_beds').val(d.extra_beds);
                     
@@ -1058,7 +1334,13 @@ jQuery(document).ready(function($) {
                     
                     $('#transport-wrapper').empty();
                     if(r && r.transports) {
-                        r.transports.forEach((veh, i) => { addTransportRow(veh, r.trans_qtys[i]); });
+                        r.transports.forEach((veh, i) => { 
+                            let tDays = (r.trans_days && r.trans_days[i]) ? r.trans_days[i] : d.days;
+                            let tPick = (r.trans_pickups && r.trans_pickups[i]) ? r.trans_pickups[i] : d.pickup;
+                            let customRate = (r.trans_custom_rates && r.trans_custom_rates[i] !== undefined) ? r.trans_custom_rates[i] : '';
+                            let customTotal = (r.trans_custom_totals && r.trans_custom_totals[i] !== undefined) ? r.trans_custom_totals[i] : '';
+                            addTransportRow(veh, r.trans_qtys[i], tDays, tPick, customRate, customTotal); 
+                        });
                     }
                     
                     $('#night-stay-wrapper').empty();
@@ -1069,6 +1351,15 @@ jQuery(document).ready(function($) {
                         });
                     } else if (d.stays) {
                         d.stays.forEach((stay) => { addStayRow(stay.place, stay.category, '', stay.nights); }); 
+                    }
+
+                    $('#addons-wrapper').empty();
+                    if(r && r.addon_names && r.addon_names.length > 0) {
+                        r.addon_names.forEach((name, i) => { 
+                            let price = (r.addon_prices && r.addon_prices[i]) ? r.addon_prices[i] : 0;
+                            let type = (r.addon_types && r.addon_types[i]) ? r.addon_types[i] : 'flat';
+                            addAddonRow(name, price, type); 
+                        });
                     }
 
                     if(d.itinerary) {
@@ -1097,7 +1388,6 @@ jQuery(document).ready(function($) {
             }
         });
     });
-
 
     $('#pmt_quote_search').on('input', function() {
         renderQuotesDropdown($(this).val(), 'pmt');
@@ -1682,12 +1972,17 @@ jQuery(document).ready(function($) {
         fetchTransportPricing(); 
         
         loadPresets(); 
+        loadAddonPresets(); // Load custom addons
 
         if($('#night-stay-wrapper').children().length === 0) {
             addStayRow();
         }
+        
+        // This ensures the first Transport row is generated perfectly on fresh load!
+        if($('#transport-wrapper').children().length === 0) {
+            addTransportRow();
+        }
 
-        setTimeout(() => { triggerAutoTransportOptimization(); }, 500); 
         loadPaymentQuotes(); 
     }, 200);
 

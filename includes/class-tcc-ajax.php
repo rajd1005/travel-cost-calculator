@@ -51,6 +51,14 @@ add_action( 'wp_ajax_tcc_load_notes', 'tcc_load_notes' );
 add_action( 'wp_ajax_tcc_save_note', 'tcc_save_note' );
 add_action( 'wp_ajax_tcc_delete_note', 'tcc_delete_note' );
 
+// ADDON PRESET ACTIONS
+add_action( 'wp_ajax_tcc_save_addon_preset', 'tcc_save_addon_preset' );
+add_action( 'wp_ajax_nopriv_tcc_save_addon_preset', 'tcc_save_addon_preset' );
+add_action( 'wp_ajax_tcc_load_addon_presets', 'tcc_load_addon_presets' );
+add_action( 'wp_ajax_nopriv_tcc_load_addon_presets', 'tcc_load_addon_presets' );
+add_action( 'wp_ajax_tcc_delete_addon_preset', 'tcc_delete_addon_preset' );
+add_action( 'wp_ajax_nopriv_tcc_delete_addon_preset', 'tcc_delete_addon_preset' );
+
 
 function tcc_optimize_transport() {
     if ( ! is_user_logged_in() ) wp_die();
@@ -66,7 +74,6 @@ function tcc_optimize_transport() {
 
     if (!$vehicles || count($vehicles) == 0) { wp_send_json_error(); wp_die(); }
 
-    // Find max capacity for array bounds
     $max_cap = 0;
     foreach($vehicles as $v) {
         $cap = max(1, intval($v->capacity));
@@ -94,7 +101,6 @@ function tcc_optimize_transport() {
             $new_cars = $cars[$i] + 1;
             $new_cost = $cost[$i] + $price;
 
-            // Only update if it uses fewer cars, OR uses same cars but is cheaper
             if ($new_cars < $cars[$next] || ($new_cars == $cars[$next] && $new_cost < $cost[$next])) {
                 $cars[$next] = $new_cars;
                 $cost[$next] = $new_cost;
@@ -107,7 +113,6 @@ function tcc_optimize_transport() {
     $best_idx = $pax;
     $best_cost = INF;
     
-    // DP: Strictly enforce fewest cars first, then lowest cost for that number of cars.
     for ($i = $pax; $i <= $target; $i++) {
         if ($cars[$i] === INF) continue;
         
@@ -155,12 +160,13 @@ function tcc_calculate_trip() {
     $client_phone = isset($_POST['client_phone']) ? trim(sanitize_text_field($_POST['client_phone'])) : '';
     $client_email = isset($_POST['client_email']) ? trim(sanitize_email($_POST['client_email'])) : '';
 
-    $destination  = trim(sanitize_text_field($_POST['destination']));
-    $total_pax    = intval($_POST['total_pax']);
-    $child_pax    = intval($_POST['child_pax']);
-    $total_days   = intval($_POST['total_days']);
-    $no_of_rooms  = intval($_POST['no_of_rooms']);
-    $extra_beds   = intval($_POST['extra_beds']);
+    $destination    = trim(sanitize_text_field($_POST['destination']));
+    $total_pax      = intval($_POST['total_pax']);
+    $child_pax      = intval($_POST['child_pax']);
+    $child_6_12_pax = isset($_POST['child_6_12_pax']) ? intval($_POST['child_6_12_pax']) : 0;
+    $total_days     = intval($_POST['total_days']);
+    $no_of_rooms    = intval($_POST['no_of_rooms']);
+    $extra_beds     = intval($_POST['extra_beds']);
     
     $pickup_loc   = trim(sanitize_text_field($_POST['pickup_location']));
     $pickup_custom= isset($_POST['pickup_custom']) ? trim(sanitize_text_field($_POST['pickup_custom'])) : '';
@@ -179,7 +185,6 @@ function tcc_calculate_trip() {
         $end_date = date('Y-m-d', strtotime($start_date . " + {$total_nights} days"));
     } elseif (empty($start_date) && $total_days > 0) {
         $total_nights = $total_days - 1;
-        // Fallback End date if start is left blank (from today)
         $end_date = date('Y-m-d', strtotime(date('Y-m-d') . " + {$total_nights} days")); 
     }
 
@@ -190,6 +195,10 @@ function tcc_calculate_trip() {
 
     $transports   = isset($_POST['transportation']) ? $_POST['transportation'] : array();
     $trans_qtys   = isset($_POST['transport_qty']) ? $_POST['transport_qty'] : array();
+    $trans_days   = isset($_POST['transport_days']) ? $_POST['transport_days'] : array();
+    $trans_pickups= isset($_POST['transport_pickup']) ? $_POST['transport_pickup'] : array(); 
+    $trans_custom_rates = isset($_POST['transport_custom_rate']) ? $_POST['transport_custom_rate'] : array(); 
+    $trans_custom_totals = isset($_POST['transport_custom_total']) ? $_POST['transport_custom_total'] : array();
 
     $day_itinerary = isset($_POST['itinerary_day']) ? $_POST['itinerary_day'] : array();
 
@@ -217,7 +226,6 @@ function tcc_calculate_trip() {
     $dest_payment_terms = isset($master_data[$destination]['payment_terms']) ? $master_data[$destination]['payment_terms'] : '';
 
     $surcharge_percent = 0;
-    // Use fallback current date if start date is missing
     $surcharge_date = !empty($start_date) ? $start_date : date('Y-m-d'); 
     
     if(isset($master_data[$destination]['seasons']) && is_array($master_data[$destination]['seasons'])) {
@@ -235,40 +243,67 @@ function tcc_calculate_trip() {
     $surcharge_multiplier = 1 + ($surcharge_percent / 100);
 
     if ( !empty($transports) ) {
-        $first_rate = null;
+        $first_rate_obj = null;
+        $first_active_price = 0;
+        $first_t_days = $total_days;
+        $first_row_pickup = $pickup_loc;
+        
         foreach ( $transports as $index => $veh ) {
             $qty = intval($trans_qtys[$index]);
             $vehicle = trim(sanitize_text_field($veh));
+            $t_days = isset($trans_days[$index]) && intval($trans_days[$index]) > 0 ? intval($trans_days[$index]) : $total_days;
+            $row_pickup = isset($trans_pickups[$index]) && !empty($trans_pickups[$index]) ? trim(sanitize_text_field($trans_pickups[$index])) : $pickup_loc;
+            
+            $custom_rate_val = isset($trans_custom_rates[$index]) && $trans_custom_rates[$index] !== '' ? floatval($trans_custom_rates[$index]) : false;
+            $custom_total_val = isset($trans_custom_totals[$index]) && $trans_custom_totals[$index] !== '' ? floatval($trans_custom_totals[$index]) : false;
 
-            $rate = $wpdb->get_row( $wpdb->prepare("SELECT * FROM $table_transport WHERE destination = %s AND pickup_location = %s AND vehicle_type = %s", $destination, $pickup_loc, $vehicle));
+            $rate = $wpdb->get_row( $wpdb->prepare("SELECT * FROM $table_transport WHERE destination = %s AND pickup_location = %s AND vehicle_type = %s", $destination, $row_pickup, $vehicle));
 
-            if ( $rate ) {
-                if ($index === 0) $first_rate = $rate; 
-                $row_base = ($rate->price_per_day * $total_days) * $qty;
-                $row_final = $row_base * $surcharge_multiplier;
+            if ( $custom_total_val !== false || $custom_rate_val !== false || $rate ) {
+                $cap = $rate ? max(1, intval($rate->capacity)) : 6; 
+
+                if ($custom_total_val !== false) {
+                    $row_final = $custom_total_val;
+                    if ($index === 0) { 
+                        $first_rate_obj = (object)['capacity' => $cap, 'price_per_day' => 0]; 
+                        $first_active_price = ($qty > 0 && $t_days > 0) ? ($custom_total_val / $surcharge_multiplier / $qty / $t_days) : 0;
+                        $first_t_days = $t_days; 
+                        $first_row_pickup = $row_pickup;
+                    }
+                } else {
+                    $active_price = ($custom_rate_val !== false) ? $custom_rate_val : floatval($rate->price_per_day);
+                    if ($index === 0) { 
+                        $first_rate_obj = (object)['capacity' => $cap, 'price_per_day' => $active_price]; 
+                        $first_active_price = $active_price;
+                        $first_t_days = $t_days; 
+                        $first_row_pickup = $row_pickup;
+                    } 
+                    $row_base = ($active_price * $t_days) * $qty;
+                    $row_final = $row_base * $surcharge_multiplier;
+                }
                 
                 $transport_cost += $row_final;
-                $total_capacity += ($rate->capacity * $qty);
-                $transport_details[$index] = "{$qty}x {$vehicle}";
+                $total_capacity += ($cap * $qty);
+                $transport_details[$index] = "{$qty}x {$vehicle} ({$t_days}D) [{$row_pickup}]";
                 $transport_row_costs[$index] = $row_final;
             } else {
-                $error_messages[] = "No Rate for {$vehicle}";
+                $error_messages[] = "No Rate for {$vehicle} in {$row_pickup}";
             }
         }
         
-        if ($total_capacity < $total_pax && $total_pax > 0 && $first_rate) {
+        if ($total_capacity < $total_pax && $total_pax > 0 && $first_rate_obj) {
             $deficit = $total_pax - $total_capacity;
-            $cap = max(1, intval($first_rate->capacity));
+            $cap = max(1, intval($first_rate_obj->capacity));
             $extra_cars = ceil($deficit / $cap);
             $trans_qtys[0] += $extra_cars;
             
-            $extra_cost_base = ($first_rate->price_per_day * $total_days) * $extra_cars;
+            $extra_cost_base = ($first_active_price * $first_t_days) * $extra_cars;
             $extra_cost_final = $extra_cost_base * $surcharge_multiplier;
             
             $transport_cost += $extra_cost_final;
             $total_capacity += ($cap * $extra_cars);
             
-            $transport_details[0] = "{$trans_qtys[0]}x " . trim(sanitize_text_field($transports[0]));
+            $transport_details[0] = "{$trans_qtys[0]}x " . trim(sanitize_text_field($transports[0])) . " ({$first_t_days}D) [{$first_row_pickup}]";
             $transport_row_costs[0] += $extra_cost_final;
         }
     }
@@ -277,15 +312,21 @@ function tcc_calculate_trip() {
 
     if ( !empty($stay_places) ) {
         foreach ( $stay_places as $index => $place_name ) {
-            $nights = intval($stay_nights[$index]);
             $place = trim(sanitize_text_field($place_name));
-            $row_cat = isset($stay_cats[$index]) && !empty($stay_cats[$index]) ? sanitize_text_field($stay_cats[$index]) : $hotel_cat;
+            $nights = intval($stay_nights[$index]);
             
+            if ($place === 'No Hotel') {
+                $detailed_stay_info[] = array('place' => 'No Hotel Required', 'category' => '-', 'nights' => $nights, 'options' => array(array('name' => 'No Room Provided', 'link' => '')));
+                $hotel_row_costs[$index] = 0;
+                continue;
+            }
+
+            $row_cat = isset($stay_cats[$index]) && !empty($stay_cats[$index]) ? sanitize_text_field($stay_cats[$index]) : $hotel_cat;
             $raw_hotels = isset($stay_hotels[$index]) ? sanitize_text_field($stay_hotels[$index]) : '';
             $selected_hotel_array = array_map('trim', explode(',', $raw_hotels));
             $selected_hotel_array = array_filter($selected_hotel_array); 
 
-            if(empty($selected_hotel_array)) {
+            if(empty($selected_hotel_array) || in_array('None', $selected_hotel_array)) {
                 $error_messages[] = "No Hotel selected for {$place}.";
                 continue;
             }
@@ -296,7 +337,7 @@ function tcc_calculate_trip() {
             if ( $hotel_rate ) {
                 $daily_room_cost      = $no_of_rooms * $hotel_rate->room_price;
                 $daily_extra_bed_cost = $extra_beds * $hotel_rate->extra_bed_price;
-                $daily_child_cost     = $child_pax * $hotel_rate->child_price;
+                $daily_child_cost     = $child_6_12_pax * $hotel_rate->child_price; 
                 
                 $total_daily_hotel_cost = $daily_room_cost + $daily_extra_bed_cost + $daily_child_cost;
                 $row_base = $total_daily_hotel_cost * $nights;
@@ -320,11 +361,42 @@ function tcc_calculate_trip() {
         }
     }
 
+    $addon_names = isset($_POST['addon_name']) ? $_POST['addon_name'] : array();
+    $addon_prices = isset($_POST['addon_price']) ? $_POST['addon_price'] : array();
+    $addon_types = isset($_POST['addon_type']) ? $_POST['addon_type'] : array();
+    
+    $total_addon_cost = 0;
+    $valid_addons = array();
+    $payable_pax = $total_pax + $child_6_12_pax;
+
+    if(is_array($addon_names)) {
+        for ($i = 0; $i < count($addon_names); $i++) {
+            $name = trim(sanitize_text_field($addon_names[$i]));
+            $price = isset($addon_prices[$i]) ? floatval($addon_prices[$i]) : 0;
+            $type = isset($addon_types[$i]) ? sanitize_text_field($addon_types[$i]) : 'flat';
+            
+            if (!empty($name)) {
+                if ($type === 'per_person') {
+                    $total_addon_cost += ($price * $payable_pax);
+                } else {
+                    $total_addon_cost += $price;
+                }
+                $valid_addons[] = $name;
+            }
+        }
+    }
+
+    if (!empty($valid_addons)) {
+        if (!empty(trim($dest_inclusions))) {
+            $dest_inclusions .= "\n";
+        }
+        $dest_inclusions .= implode("\n", $valid_addons);
+    }
+
     if (!empty($error_messages)) { wp_send_json_error(array('errors' => implode(" <br> ", $error_messages))); wp_die(); }
 
-    $actual_cost = $transport_cost + $hotel_cost;
+    $actual_cost = $transport_cost + $hotel_cost + $total_addon_cost;
     
-    // --- EXACT DISCOUNT & NET PROFIT MATHEMATICS ---
     $override_profit = isset($_POST['override_profit']) && $_POST['override_profit'] !== '' ? floatval($_POST['override_profit']) : false;
     $manual_pp_override = isset($_POST['manual_pp_override']) && $_POST['manual_pp_override'] !== '' ? floatval($_POST['manual_pp_override']) : false;
 
@@ -338,7 +410,6 @@ function tcc_calculate_trip() {
     $pg_rate = $pg_pct / 100;
     $M = 1 + $gst_rate;
 
-    // STEP 1: Calculate the INITIAL Base Price (Before Discount)
     if ($manual_pp_override !== false) {
         $target_grand_total = $manual_pp_override * $total_pax;
         $initial_base_price = $target_grand_total / $M;
@@ -348,36 +419,31 @@ function tcc_calculate_trip() {
             $denominator = 1 - ($M * $pt_rate) - ($M * $pg_rate);
         } else {
             $target_net_profit = $profit_per_person * $total_pax; 
-            $client_pt_burden = $pt_rate * 0.50; 
-            $client_pg_burden = $pg_rate * 0.50;
-            $denominator = 1 - ($M * $client_pt_burden) - ($M * $client_pg_burden);
+            $denominator = 1 - ($M * $pt_rate) - ($M * $pg_rate);
         }
         
         if ($denominator <= 0) $denominator = 0.01; 
         $initial_base_price = ($target_net_profit + $actual_cost) / $denominator;
     }
 
-    // STEP 2: Calculate and Deduct Discount from the Initial Base Price
     $d1_amt  = ($d1_type === 'flat') ? $d1_val : (($d1_type === 'percent') ? ($initial_base_price * ($d1_val / 100)) : 0);
     $d2_amt  = ($d2_type === 'flat') ? $d2_val : (($d2_type === 'percent') ? ($initial_base_price * ($d2_val / 100)) : 0);
     $total_discount_amount = $d1_amt + $d2_amt;
     
-    // This is the true Final Base Price that the rest of the math follows
     $discounted_base_price = max(0, $initial_base_price - $total_discount_amount);
     
-    // STEP 3: Forward Calculate the rest based on the Discounted Base Price
+    $exact_grand_total = $discounted_base_price * $M;
+    $grand_total = ceil($exact_grand_total); 
+    
+    $discounted_base_price = $grand_total / $M;
+    $gst = $grand_total - $discounted_base_price;
+    
     $per_person_excl_gst = ($total_pax > 0) ? ($discounted_base_price / $total_pax) : 0;
-    
-    $gst = $discounted_base_price * $gst_rate;
-    $grand_total = $discounted_base_price + $gst; // This is Total Received from Client
-    
     $per_person_inc_gst = ($total_pax > 0) ? ($grand_total / $total_pax) : 0;
 
-    // Taxes recalculate downwards because the grand_total is lower due to the discount
     $prof_tax = $grand_total * $pt_rate;
     $pg_charge = $grand_total * $pg_rate;
     
-    // Profit takes the hit
     $gross_profit = $discounted_base_price - $actual_cost; 
     $net_profit = $gross_profit - $prof_tax - $pg_charge;
 
@@ -389,6 +455,7 @@ function tcc_calculate_trip() {
         'start_date'  => $start_date,
         'end_date'    => $end_date,
         'pax'         => $total_pax,
+        'child_6_12'  => $child_6_12_pax,
         'child'       => $child_pax,
         'days'        => $total_days,
         'rooms'       => $no_of_rooms,
@@ -406,14 +473,15 @@ function tcc_calculate_trip() {
         'actual_cost' => round($actual_cost, 2),
         'total_hotel_cost' => round($hotel_cost, 2),
         'total_trans_cost' => round($transport_cost, 2),
+        'total_addon_cost' => round($total_addon_cost, 2),
 
-        'final_profit' => round($gross_profit, 2), // Gross Profit
+        'final_profit' => round($gross_profit, 2), 
         'prof_tax'    => round($prof_tax, 2),
         'pg_charge'   => round($pg_charge, 2),
         'net_profit'  => round($net_profit, 2),
         
         'discount_amount' => round($total_discount_amount, 2),
-        'total_base_price' => round($discounted_base_price, 2), // The discounted base
+        'total_base_price' => round($discounted_base_price, 2), 
         'gst_pct'     => $gst_pct,
         'pt_pct'      => $pt_pct,
         'pg_pct'      => $pg_pct,
@@ -430,6 +498,13 @@ function tcc_calculate_trip() {
     $raw_form = array(
         'transports' => $transports,
         'trans_qtys' => $trans_qtys,
+        'trans_days' => $trans_days,
+        'trans_pickups' => $trans_pickups, 
+        'trans_custom_rates' => $trans_custom_rates, 
+        'trans_custom_totals' => $trans_custom_totals,
+        'addon_names' => $addon_names,
+        'addon_prices' => $addon_prices,
+        'addon_types' => $addon_types,
         'stay_places' => $stay_places,
         'stay_hotels' => $stay_hotels,
         'stay_nights' => $stay_nights,
@@ -450,7 +525,7 @@ function tcc_calculate_trip() {
     
     if ($is_final) {
         $post_content_json = wp_json_encode(array(
-            'per_person' => round($per_person_excl_gst, 2), // Save strictly as EXCL GST
+            'per_person' => round($per_person_excl_gst, 2), 
             'per_person_with_gst' => round($per_person_inc_gst, 2),
             'gst' => round($gst, 2),
             'grand_total' => round($grand_total, 2),
@@ -787,8 +862,6 @@ function tcc_delete_itinerary_preset() {
     }
 }
 
-// --- PAYMENTS & QUOTE MGMT ENDPOINTS ---
-
 function tcc_load_quotes_list() {
     if ( ! is_user_logged_in() ) wp_die();
     
@@ -962,6 +1035,7 @@ function tcc_export_backup() {
         'tcc_global_settings'   => get_option('tcc_global_settings'),
         'tcc_master_settings'   => get_option('tcc_master_settings'),
         'tcc_itinerary_presets' => get_option('tcc_itinerary_presets'),
+        'tcc_addon_presets'     => get_option('tcc_addon_presets'),
     );
 
     $table_hotels = $wpdb->prefix . 'tcc_hotel_rates';
@@ -1007,6 +1081,7 @@ function tcc_import_backup() {
     if(isset($data['options']['tcc_global_settings'])) update_option('tcc_global_settings', $data['options']['tcc_global_settings']);
     if(isset($data['options']['tcc_master_settings'])) update_option('tcc_master_settings', $data['options']['tcc_master_settings']);
     if(isset($data['options']['tcc_itinerary_presets'])) update_option('tcc_itinerary_presets', $data['options']['tcc_itinerary_presets']);
+    if(isset($data['options']['tcc_addon_presets'])) update_option('tcc_addon_presets', $data['options']['tcc_addon_presets']);
 
     $table_hotels = $wpdb->prefix . 'tcc_hotel_rates';
     $table_trans  = $wpdb->prefix . 'tcc_transport_rates';
@@ -1077,7 +1152,7 @@ function tcc_send_quote_email() {
     $message .= "</body></html>";
 
     $headers = array('Content-Type: text/html; charset=UTF-8');
-    $headers[] = 'Bcc: ' . $admin_email; // Add Site Admin to BCC
+    $headers[] = 'Bcc: ' . $admin_email; 
 
     $sent = wp_mail($client_email, $subject, $message, $headers);
 
@@ -1088,7 +1163,6 @@ function tcc_send_quote_email() {
     }
 }
 
-// --- QUICK NOTES ENDPOINTS ---
 function tcc_load_notes() {
     if ( ! is_user_logged_in() ) wp_die();
     $notes = get_option('tcc_saved_notes', array());
@@ -1138,4 +1212,52 @@ function tcc_delete_note() {
     
     update_option('tcc_saved_notes', $new_notes);
     wp_send_json_success($new_notes);
+}
+
+// --- ADDON PRESET ENDPOINTS ---
+
+function tcc_save_addon_preset() {
+    if ( ! is_user_logged_in() ) wp_die();
+    $preset_name = trim(sanitize_text_field($_POST['preset_name']));
+    $destination = trim(sanitize_text_field($_POST['destination']));
+    
+    $addon_price = isset($_POST['addon_price']) ? floatval($_POST['addon_price']) : 0;
+    $addon_type = isset($_POST['addon_type']) ? sanitize_text_field($_POST['addon_type']) : 'flat';
+
+    if(empty($preset_name) || empty($destination)) { wp_send_json_error("Missing data"); wp_die(); }
+
+    $presets = get_option('tcc_addon_presets', array());
+    if(!isset($presets[$destination])) $presets[$destination] = array();
+    
+    $presets[$destination][$preset_name] = array(
+        'price' => $addon_price,
+        'type'  => $addon_type
+    );
+    update_option('tcc_addon_presets', $presets);
+    
+    wp_send_json_success("Saved Successfully");
+}
+
+function tcc_load_addon_presets() {
+    if ( ! is_user_logged_in() ) wp_die();
+    $destination = trim(sanitize_text_field($_POST['destination']));
+    $presets = get_option('tcc_addon_presets', array());
+    if(isset($presets[$destination])) wp_send_json_success($presets[$destination]);
+    else wp_send_json_success(array());
+}
+
+function tcc_delete_addon_preset() {
+    if ( ! is_user_logged_in() ) wp_die();
+    $preset_name = trim(sanitize_text_field($_POST['preset_name']));
+    $destination = trim(sanitize_text_field($_POST['destination']));
+    if(empty($preset_name) || empty($destination)) { wp_send_json_error("Missing data"); wp_die(); }
+
+    $presets = get_option('tcc_addon_presets', array());
+    if(isset($presets[$destination]) && isset($presets[$destination][$preset_name])) {
+        unset($presets[$destination][$preset_name]);
+        update_option('tcc_addon_presets', $presets);
+        wp_send_json_success("Deleted Successfully");
+    } else {
+        wp_send_json_error("Preset not found");
+    }
 }
