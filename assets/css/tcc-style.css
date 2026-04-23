@@ -157,3 +157,28 @@
     .tcc-repeater-row { flex-direction: column; align-items: stretch; border: 1px solid #eee; padding: 4px; border-radius: 3px; }
     .tcc-wrapper .tcc-repeater-row .tcc-btn-del { flex: auto !important; height: 28px !important; margin-top: 2px !important; }
 }
+
+/* --- MULTI-STEP WIZARD STYLES --- */
+.tcc-step {
+    display: none;
+    animation: tccFadeIn 0.3s ease-in-out;
+}
+.tcc-step.active {
+    display: block;
+}
+@keyframes tccFadeIn { 
+    from { opacity: 0; transform: translateY(5px); } 
+    to { opacity: 1; transform: translateY(0); } 
+}
+
+.tcc-step-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 12px;
+    margin-top: 15px;
+    margin-bottom: 15px;
+}

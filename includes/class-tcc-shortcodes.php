@@ -59,145 +59,169 @@ function tcc_render_calculator_form() {
                 <input type="hidden" name="edit_quote_id" id="edit_quote_id" value="">
             </div>
 
-            <div class="tcc-card" style="border-left: 4px solid #b93b59;">
-                <div class="tcc-card-title">0. Client Details <span style="font-size:11px; font-weight:normal; color:#64748b;">(Optional for Quotation)</span></div>
-                <div class="tcc-grid-3">
-                    <div class="tcc-form-group">
-                        <label>Client Name</label>
-                        <input type="text" name="client_name" id="client_name" placeholder="E.g. Rahul Sharma">
-                    </div>
-                    <div class="tcc-form-group">
-                        <label>WhatsApp Number</label>
-                        <input type="text" name="client_phone" id="client_phone" placeholder="+91 XXXXX XXXXX">
-                    </div>
-                    <div class="tcc-form-group">
-                        <label>Email</label>
-                        <input type="email" name="client_email" id="client_email" placeholder="client@email.com">
-                    </div>
-                </div>
-            </div>
-
-            <div class="tcc-card">
-                <div class="tcc-card-title">1. Trip Basics</div>
-                <div class="tcc-grid-2">
-                    <div class="tcc-form-group">
-                        <label>Destination</label>
-                        <select name="destination" id="calc_destination" required>
-                            <?php foreach($destinations as $dest): ?>
-                                <option value="<?php echo esc_attr($dest); ?>"><?php echo esc_html($dest); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="tcc-form-group">
-                        <label>Start Date</label>
-                        <input type="date" name="start_date" id="start_date" required>
-                    </div>
-                </div>
-                <div class="tcc-grid-2">
-                    <div class="tcc-form-group">
-                        <label>Adults (>6yr)</label>
-                        <input type="number" name="total_pax" id="total_pax" min="1" value="2" required>
-                    </div>
-                    <div class="tcc-form-group">
-                        <label>Child (<6yr)</label>
-                        <input type="number" name="child_pax" id="child_pax" min="0" value="0" required>
-                    </div>
-                </div>
-            </div>
-
-            <div class="tcc-card">
-                <div class="tcc-card-title">2. Stay Duration & Rooms</div>
-                <div class="tcc-grid-3">
-                    <div class="tcc-form-group">
-                        <label>Total Days</label>
-                        <input type="number" name="total_days" id="total_days" value="4" min="1" required>
-                        <small style="font-size:10px; color:#64748b;">Nights: <span id="total_nights_display">3</span></small>
-                    </div>
-                    <div class="tcc-form-group">
-                        <label>Rooms</label>
-                        <input type="number" name="no_of_rooms" id="no_of_rooms" value="1" min="1" required>
-                    </div>
-                    <div class="tcc-form-group">
-                        <label>Extra Beds</label>
-                        <input type="number" name="extra_beds" id="extra_beds" value="0" min="0" required>
-                    </div>
-                </div>
-                <div class="tcc-form-group">
-                    <label>Overall Hotel Category <small style="color:#64748b;">(Changes all locations below)</small></label>
-                    <select name="hotel_category" id="calc_hotel_cat" required></select>
-                </div>
-            </div>
-
-            <div class="tcc-card">
-                <div class="tcc-card-title">3. Transportation</div>
-                <div class="tcc-grid-2">
-                    <div class="tcc-form-group">
-                        <label>Pickup Location</label>
-                        <div style="display:flex; gap:4px;">
-                            <select name="pickup_location" id="calc_pickup" required style="flex:1;"></select>
-                            <input type="text" name="pickup_custom" id="calc_pickup_custom" placeholder="Custom Name (Opt.)" style="flex:1;">
-                        </div>
-                    </div>
-                    <div class="tcc-form-group">
-                        <label>Drop Location</label>
-                        <div style="display:flex; gap:4px;">
-                            <select name="drop_location" id="calc_drop" required style="flex:1;"></select>
-                            <input type="text" name="drop_custom" id="calc_drop_custom" placeholder="Custom Name (Opt.)" style="flex:1;">
-                        </div>
-                    </div>
-                </div>
-                <div id="transport-wrapper">
-                    <div class="transport-row tcc-repeater-row" style="flex-wrap:wrap;">
-                        <select name="transportation[]" class="transport_dropdown" required style="flex:3;"></select>
-                        <input type="number" name="transport_qty[]" value="1" min="1" placeholder="Qty" required style="flex:1;">
-                        <button type="button" class="remove_transport tcc-btn-del">X</button>
-                        <div class="tcc-trans-cost" style="flex: 1 1 100%; text-align:right; font-size:11px; color:#16a34a; font-weight:bold; margin-top:-2px;"></div>
-                    </div>
-                </div>
-                <button type="button" id="add_transport" class="tcc-btn-secondary">+ Add Vehicle</button>
-            </div>
-
-            <div class="tcc-card">
-                <div class="tcc-card-title">4. Itinerary Routing</div>
-                <div id="night-stay-wrapper">
-                    <div class="night-stay-row tcc-repeater-row tcc-fade-in" style="flex-wrap:wrap; gap:5px;">
-                        <select name="stay_place[]" class="stay_place_dropdown" required style="flex:2;"></select>
-                        <select name="stay_category[]" class="stay_cat_dropdown" required style="flex:1.5;"></select>
-                        <div style="flex:3;">
-                            <select class="stay_hotel_dropdown" multiple required style="width:100%; height:55px !important; border:1px solid #ccc; border-radius:3px; padding:2px; font-size:12px; background:#fff; outline:none;"></select>
-                            <input type="hidden" name="stay_hotel[]" class="stay_hotel_hidden">
-                        </div>
-                        <input type="number" name="stay_nights[]" placeholder="Nights" value="1" class="stay_nights" min="1" required style="flex:0.8;">
-                        <button type="button" class="remove_stay_place tcc-btn-del">X</button>
-                        <div class="tcc-hotel-cost" style="flex: 1 1 100%; text-align:right; font-size:11px; color:#16a34a; font-weight:bold; margin-top:-2px;"></div>
-                    </div>
-                </div>
-                <button type="button" id="add_stay_place" class="tcc-btn-secondary" style="margin-top:5px;">+ Add Location</button>
-            </div>
-
-            <div class="tcc-card">
-                <div class="tcc-card-title" style="display: flex; justify-content: space-between; align-items: center;">
-                    <span>4.5 Day-wise Itinerary (Drag to Reorder)</span>
-                    <div style="display:flex; gap:5px;">
-                        <select id="itinerary_preset_select" style="width:140px; font-weight:normal;">
-                            <option value="">-- Load Preset --</option>
-                        </select>
-                        <button type="button" id="delete_itinerary_preset" class="tcc-btn-del" style="display:none; padding:4px 8px; margin:0; background:#fee2e2; color:#dc2626; border:1px solid #f87171;" title="Delete Preset">🗑️</button>
-                    </div>
-                </div>
+            <div id="tcc-step-1" class="tcc-step active">
                 
-                <div id="day-wise-wrapper" style="margin-bottom: 10px;">
+                <div class="tcc-card" style="border-left: 4px solid #b93b59;">
+                    <div class="tcc-card-title tcc-step-accordion-header" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; margin-bottom:0;">
+                        <span>1. Trip Basics & Client Details</span>
+                        <span class="tcc-acc-icon" style="color:#b93b59; font-size:12px;">▼</span>
+                    </div>
+                    
+                    <div class="tcc-step-accordion-body" style="display:none; margin-top:10px; border-top:1px dashed #e2e8f0; padding-top:10px;">
+                        <div class="tcc-grid-3" style="margin-bottom: 10px;">
+                            <div class="tcc-form-group">
+                                <label>Client Name</label>
+                                <input type="text" name="client_name" id="client_name" placeholder="E.g. Rahul Sharma">
+                            </div>
+                            <div class="tcc-form-group">
+                                <label>WhatsApp Number</label>
+                                <input type="text" name="client_phone" id="client_phone" placeholder="+91 XXXXX XXXXX">
+                            </div>
+                            <div class="tcc-form-group">
+                                <label>Email</label>
+                                <input type="email" name="client_email" id="client_email" placeholder="client@email.com">
+                            </div>
+                        </div>
+
+                        <div class="tcc-grid-2">
+                            <div class="tcc-form-group">
+                                <label>Destination</label>
+                                <select name="destination" id="calc_destination" required>
+                                    <?php foreach($destinations as $dest): ?>
+                                        <option value="<?php echo esc_attr($dest); ?>"><?php echo esc_html($dest); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="tcc-form-group">
+                                <label>Start Date <small style="color:#64748b;">(Optional)</small></label>
+                                <input type="date" name="start_date" id="start_date">
+                            </div>
+                        </div>
+                        <div class="tcc-grid-2">
+                            <div class="tcc-form-group">
+                                <label>Adults (>6yr)</label>
+                                <input type="number" name="total_pax" id="total_pax" min="1" value="" placeholder="No. of Adults" required>
+                            </div>
+                            <div class="tcc-form-group">
+                                <label>Child (<6yr)</label>
+                                <input type="number" name="child_pax" id="child_pax" min="0" value="0" required>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <div style="display:flex; gap:5px; background: #f9f9f9; padding: 8px; border: 1px dashed #ccc; border-radius: 3px;">
-                    <input type="text" id="new_preset_name" placeholder="Preset Name (e.g. Kashmir 5D/4N)" style="flex:2; margin:0;">
-                    <button type="button" id="save_itinerary_preset" class="tcc-btn-secondary" style="flex:1; margin:0;">Save as Preset</button>
+                <div class="tcc-card">
+                    <div class="tcc-card-title" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>2. Day-wise Itinerary (Drag to Reorder)</span>
+                        <div style="display:flex; gap:5px;">
+                            <select id="itinerary_preset_select" style="width:140px; font-weight:normal;">
+                                <option value="">-- Load Preset --</option>
+                            </select>
+                            <button type="button" id="delete_itinerary_preset" class="tcc-btn-del" style="display:none; padding:4px 8px; margin:0; background:#fee2e2; color:#dc2626; border:1px solid #f87171;" title="Delete Preset">🗑️</button>
+                        </div>
+                    </div>
+                    
+                    <div id="day-wise-wrapper" style="margin-bottom: 10px;"></div>
+                    
+                    <button type="button" id="tcc_add_day_btn" class="tcc-btn-secondary" style="margin-bottom:10px;">+ Add Day</button>
+
+                    <div style="display:flex; gap:5px; background: #f9f9f9; padding: 8px; border: 1px dashed #ccc; border-radius: 3px;">
+                        <input type="text" id="new_preset_name" placeholder="Preset Name (e.g. Kashmir 5D/4N)" style="flex:2; margin:0;">
+                        <button type="button" id="save_itinerary_preset" class="tcc-btn-secondary" style="flex:1; margin:0;">Save as Preset</button>
+                    </div>
+                    <div id="preset_msg" style="font-size:11px; color:#16a34a; margin-top:5px; display:none; font-weight:bold;">Saved!</div>
                 </div>
-                <div id="preset_msg" style="font-size:11px; color:#16a34a; margin-top:5px; display:none; font-weight:bold;">Saved!</div>
+
+                <div class="tcc-card">
+                    <div class="tcc-card-title tcc-step-accordion-header" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; margin-bottom:0;">
+                        <span>3. Transportation</span>
+                        <span class="tcc-acc-icon" style="color:#b93b59; font-size:12px;">▼</span>
+                    </div>
+                    
+                    <div class="tcc-step-accordion-body" style="display:none; margin-top:10px; border-top:1px dashed #e2e8f0; padding-top:10px;">
+                        <div class="tcc-grid-2">
+                            <div class="tcc-form-group">
+                                <label>Pickup Location</label>
+                                <div style="display:flex; gap:4px;">
+                                    <select name="pickup_location" id="calc_pickup" required style="flex:1;"></select>
+                                    <input type="text" name="pickup_custom" id="calc_pickup_custom" placeholder="Custom Name (Opt.)" style="flex:1;">
+                                </div>
+                            </div>
+                            <div class="tcc-form-group">
+                                <label>Drop Location</label>
+                                <div style="display:flex; gap:4px;">
+                                    <select name="drop_location" id="calc_drop" required style="flex:1;"></select>
+                                    <input type="text" name="drop_custom" id="calc_drop_custom" placeholder="Custom Name (Opt.)" style="flex:1;">
+                                </div>
+                            </div>
+                        </div>
+                        <div id="transport-wrapper">
+                            <div class="transport-row tcc-repeater-row" style="flex-wrap:wrap;">
+                                <select name="transportation[]" class="transport_dropdown" required style="flex:3;"></select>
+                                <input type="number" name="transport_qty[]" value="1" min="1" placeholder="Qty" required style="flex:1;">
+                                <button type="button" class="remove_transport tcc-btn-del">X</button>
+                                <div class="tcc-trans-cost" style="flex: 1 1 100%; text-align:right; font-size:11px; color:#16a34a; font-weight:bold; margin-top:-2px;"></div>
+                            </div>
+                        </div>
+                        <button type="button" id="add_transport" class="tcc-btn-secondary">+ Add Vehicle</button>
+                    </div>
+                </div>
+
             </div>
 
-            <div class="tcc-card" style="border-color: #bee3f8; background:#f0f9ff;">
-                <div class="tcc-card-title" style="color:#0369a1;">5. Adjustments</div>
+            <div id="tcc-step-2" class="tcc-step">
+                
+                <div class="tcc-card">
+                    <div class="tcc-card-title">4. Stay Duration & Rooms</div>
+                    <div class="tcc-grid-3">
+                        <div class="tcc-form-group">
+                            <label>Total Days</label>
+                            <input type="number" name="total_days" id="total_days" value="4" min="1" required>
+                            <small style="font-size:10px; color:#64748b;">Nights: <span id="total_nights_display">3</span></small>
+                        </div>
+                        <div class="tcc-form-group">
+                            <label>Rooms</label>
+                            <input type="number" name="no_of_rooms" id="no_of_rooms" value="1" min="1" required>
+                        </div>
+                        <div class="tcc-form-group">
+                            <label>Extra Beds</label>
+                            <input type="number" name="extra_beds" id="extra_beds" value="0" min="0" required>
+                        </div>
+                    </div>
+                    <div class="tcc-form-group">
+                        <label>Overall Hotel Category <small style="color:#64748b;">(Changes all locations below)</small></label>
+                        <select name="hotel_category" id="calc_hotel_cat" required></select>
+                    </div>
+                </div>
+
+                <div class="tcc-card">
+                    <div class="tcc-card-title">5. Itinerary Routing (Hotels)</div>
+                    <div id="night-stay-wrapper">
+                        <div class="night-stay-row tcc-repeater-row tcc-fade-in" style="flex-wrap:wrap; gap:5px;">
+                            <select name="stay_place[]" class="stay_place_dropdown" required style="flex:2;"></select>
+                            <select name="stay_category[]" class="stay_cat_dropdown" required style="flex:1.5;"></select>
+                            <div style="flex:3;">
+                                <select class="stay_hotel_dropdown" multiple required style="width:100%; height:55px !important; border:1px solid #ccc; border-radius:3px; padding:2px; font-size:12px; background:#fff; outline:none;"></select>
+                                <input type="hidden" name="stay_hotel[]" class="stay_hotel_hidden">
+                            </div>
+                            <input type="number" name="stay_nights[]" placeholder="Nights" value="1" class="stay_nights" min="1" required style="flex:0.8;">
+                            <button type="button" class="remove_stay_place tcc-btn-del">X</button>
+                            <div class="tcc-hotel-cost" style="flex: 1 1 100%; text-align:right; font-size:11px; color:#16a34a; font-weight:bold; margin-top:-2px;"></div>
+                        </div>
+                    </div>
+                    <button type="button" id="add_stay_place" class="tcc-btn-secondary" style="margin-top:5px;">+ Add Location</button>
+                </div>
+
+            </div>
+
+            <div class="tcc-step-nav">
+                <button type="button" id="tcc_prev_step" class="tcc-btn-secondary" style="margin:0 !important; min-width:100px;">&laquo; Previous</button>
+                <div id="tcc_step_indicator" style="font-weight:bold; font-size:13px; color:#64748b;">Step 1 of 2</div>
+                <button type="button" id="tcc_next_step" class="tcc-btn-primary" style="margin:0 !important; min-width:100px;">Next &raquo;</button>
+            </div>
+
+            <div class="tcc-card" style="border-color: #bee3f8; background:#f0f9ff; margin-top:20px;">
+                <div class="tcc-card-title" style="color:#0369a1;">Final Adjustments & Overview</div>
                 
                 <div style="background:#e0f2fe; padding:10px; border-radius:4px; border:1px solid #bae6fd; margin-bottom:15px; font-size:12px; color:#0369a1;">
                     <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
@@ -266,6 +290,15 @@ function tcc_render_calculator_form() {
                         <span style="font-weight:900; color:#000; font-size:14px;">Total Value: <span id="live_total">₹0.00</span></span>
                     </div>
                     
+                    <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:10px;">
+                        <button type="button" id="tcc_quick_wa_btn" class="tcc-btn-secondary" style="flex:1; background:#25D366; color:#fff; border-color:#128C7E; font-size:11px !important;">📱 Summary</button>
+                        <button type="button" id="tcc_copy_itinerary_btn" class="tcc-btn-secondary" style="flex:1; font-size:11px !important; background:#fff;">📋 Itinerary</button>
+                        <button type="button" id="tcc_copy_hotels_btn" class="tcc-btn-secondary" style="flex:1; font-size:11px !important; background:#fff;">🏨 Hotels</button>
+                        <button type="button" id="tcc_copy_inclusions_btn" class="tcc-btn-secondary" style="flex:1; font-size:11px !important; background:#fff;">✅ Inclusions</button>
+                        <button type="button" id="tcc_copy_exclusions_btn" class="tcc-btn-secondary" style="flex:1; font-size:11px !important; background:#fff;">❌ Exclusions</button>
+                        <button type="button" id="tcc_copy_payment_btn" class="tcc-btn-secondary" style="flex:1; font-size:11px !important; background:#fff;">💳 Payments</button>
+                    </div>
+
                     <div style="text-align:center; font-size:10px; color:#d84b6b; margin-top:5px; display:none;" id="live_surcharge_info"></div>
                     <div id="live_error" style="color:#dc3232; font-size:12px; margin-top:5px; display:none; text-align:center;"></div>
                 </div>
@@ -279,7 +312,7 @@ function tcc_render_calculator_form() {
             <input type="text" id="tcc_generated_link" readonly style="width:100%; padding:8px; font-size:13px; text-align:center; border-radius:3px; border:1px solid #28a745; margin-bottom:8px;">
             <div style="display:grid; grid-template-columns: 1fr 1.5fr 1fr; gap:10px;">
                 <button type="button" id="tcc_copy_btn" class="tcc-btn-primary" style="margin:0;">Copy Link</button>
-                <button type="button" id="tcc_copy_wa_btn" class="tcc-btn-primary" style="margin:0; background:#25D366; border-color:#128C7E;">WA Text</button>
+                <button type="button" id="tcc_copy_wa_btn" class="tcc-btn-primary" style="margin:0; background:#25D366; border-color:#128C7E;">WA Full Text</button>
                 <a href="#" id="tcc_open_btn" target="_blank" class="tcc-btn-secondary" style="margin:0; line-height:2.2; text-decoration:none;">Open</a>
             </div>
         </div>
@@ -315,8 +348,7 @@ function tcc_render_calculator_form() {
                     </select>
                 </div>
 
-                <div style="padding:12px; overflow-y:auto; flex:1; min-height:120px; background:#f8fafc;" id="tcc-notes-list">
-                    </div>
+                <div style="padding:12px; overflow-y:auto; flex:1; min-height:120px; background:#f8fafc;" id="tcc-notes-list"></div>
 
                 <div style="padding:12px; border-top:1px solid #e2e8f0; background:#fff; border-radius:0 0 6px 6px;">
                     <input type="text" id="tcc-new-note-group" placeholder="Group (e.g. Leads)" list="tcc-note-groups-list" value="General" style="width:100%; border:1px solid #cbd5e1; border-radius:3px; padding:6px; font-size:11px; margin-bottom:6px; outline:none;">

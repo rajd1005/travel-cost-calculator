@@ -81,7 +81,6 @@ function tcc_optimize_transport() {
     $cars[0] = 0;
     $cost[0] = 0;
 
-    // Advanced DP Algorithm: Priority 1: Fewest Cars. Priority 2: Lowest Cost (for exact same capacity).
     for ($i = 0; $i <= $target; $i++) {
         if ($cars[$i] === INF) continue;
         
@@ -106,17 +105,20 @@ function tcc_optimize_transport() {
 
     $min_cars = INF;
     $best_idx = $pax;
+    $best_cost = INF;
     
-    // Find the closest capacity >= pax that uses the fewest possible cars
+    // DP: Strictly enforce fewest cars first, then lowest cost for that number of cars.
     for ($i = $pax; $i <= $target; $i++) {
         if ($cars[$i] === INF) continue;
         
         if ($cars[$i] < $min_cars) {
             $min_cars = $cars[$i];
             $best_idx = $i;
+            $best_cost = $cost[$i];
+        } elseif ($cars[$i] == $min_cars && $cost[$i] < $best_cost) {
+            $best_idx = $i;
+            $best_cost = $cost[$i];
         }
-        // By NOT using <=, we naturally prioritize the smaller capacity index (closer to exactly the pax count).
-        // This guarantees that for 5 pax, a 7-seater is selected over an 8-seater combination, etc.
     }
 
     if ($min_cars === INF) { wp_send_json_error(); wp_die(); }
@@ -169,12 +171,16 @@ function tcc_calculate_trip() {
     $display_drop   = !empty($drop_custom) ? "{$drop_custom} ({$drop_loc})" : $drop_loc;
     
     $hotel_cat    = trim(sanitize_text_field($_POST['hotel_category'])); 
-    $start_date   = sanitize_text_field($_POST['start_date']);
-
+    
+    $start_date   = isset($_POST['start_date']) ? sanitize_text_field($_POST['start_date']) : '';
     $end_date = '';
     if (!empty($start_date) && $total_days > 0) {
         $total_nights = $total_days - 1;
         $end_date = date('Y-m-d', strtotime($start_date . " + {$total_nights} days"));
+    } elseif (empty($start_date) && $total_days > 0) {
+        $total_nights = $total_days - 1;
+        // Fallback End date if start is left blank (from today)
+        $end_date = date('Y-m-d', strtotime(date('Y-m-d') . " + {$total_nights} days")); 
     }
 
     $stay_places  = isset($_POST['stay_place']) ? $_POST['stay_place'] : array();
@@ -211,8 +217,11 @@ function tcc_calculate_trip() {
     $dest_payment_terms = isset($master_data[$destination]['payment_terms']) ? $master_data[$destination]['payment_terms'] : '';
 
     $surcharge_percent = 0;
-    if(!empty($start_date) && isset($master_data[$destination]['seasons']) && is_array($master_data[$destination]['seasons'])) {
-        $trip_start_ts = strtotime($start_date);
+    // Use fallback current date if start date is missing
+    $surcharge_date = !empty($start_date) ? $start_date : date('Y-m-d'); 
+    
+    if(isset($master_data[$destination]['seasons']) && is_array($master_data[$destination]['seasons'])) {
+        $trip_start_ts = strtotime($surcharge_date);
         foreach($master_data[$destination]['seasons'] as $season) {
             $s_start = strtotime($season['start']);
             $s_end = strtotime($season['end']);
@@ -222,6 +231,7 @@ function tcc_calculate_trip() {
             }
         }
     }
+    
     $surcharge_multiplier = 1 + ($surcharge_percent / 100);
 
     if ( !empty($transports) ) {
@@ -413,7 +423,8 @@ function tcc_calculate_trip() {
         'transport_row_costs' => $transport_row_costs,
         'hotel_row_costs' => $hotel_row_costs,
         'surcharge_applied' => $surcharge_percent,
-        'itinerary'   => array_map('sanitize_text_field', $day_itinerary) 
+        'itinerary'   => array_map('sanitize_text_field', $day_itinerary),
+        'itinerary_stay_places' => isset($_POST['itinerary_stay_place']) ? array_map('sanitize_text_field', $_POST['itinerary_stay_place']) : array()
     );
 
     $raw_form = array(
@@ -571,7 +582,7 @@ function tcc_fetch_hotel_names() {
     $place = trim(sanitize_text_field($_POST['place']));
     $cat   = trim(sanitize_text_field($_POST['cat']));
 
-    $results = $wpdb->get_col( $wpdb->prepare("SELECT DISTINCT hotel_name FROM $table WHERE destination = %s AND night_stay_place = %s AND hotel_category = %s", $dest, $place, $cat));
+    $results = $wpdb->get_results( $wpdb->prepare("SELECT hotel_name, hotel_website FROM $table WHERE destination = %s AND night_stay_place = %s AND hotel_category = %s GROUP BY hotel_name", $dest, $place, $cat) );
     wp_send_json_success($results);
 }
 

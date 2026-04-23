@@ -1,5 +1,50 @@
 jQuery(document).ready(function($) {
     
+    // --- WIZARD NAVIGATION LOGIC ---
+    let currentStep = 1;
+    const totalSteps = 2;
+
+    function updateStepView() {
+        $('.tcc-step').removeClass('active');
+        $('#tcc-step-' + currentStep).addClass('active');
+
+        $('#tcc_prev_step').prop('disabled', currentStep === 1).css('opacity', currentStep === 1 ? '0.5' : '1');
+        $('#tcc_next_step').prop('disabled', currentStep === totalSteps).css('opacity', currentStep === totalSteps ? '0.5' : '1');
+        $('#tcc_step_indicator').text(`Step ${currentStep} of ${totalSteps}`);
+        
+        triggerLiveCalculation();
+    }
+
+    $('#tcc_next_step').on('click', function() {
+        if (currentStep < totalSteps) { currentStep++; updateStepView(); }
+    });
+
+    $('#tcc_prev_step').on('click', function() {
+        if (currentStep > 1) { currentStep--; updateStepView(); }
+    });
+    
+    updateStepView(); // Initialize step view
+
+    // STEP 1 MUTUALLY EXCLUSIVE ACCORDIONS
+    $('.tcc-step-accordion-header').on('click', function() {
+        let $body = $(this).next('.tcc-step-accordion-body');
+        let $icon = $(this).find('.tcc-acc-icon');
+        
+        if ($body.is(':visible')) {
+            $body.slideUp(150);
+            $icon.text('▼'); 
+        } else {
+            // Close other step accordions
+            $('.tcc-step-accordion-body').slideUp(150);
+            $('.tcc-step-accordion-header .tcc-acc-icon').text('▼');
+            
+            // Open clicked
+            $body.slideDown(150);
+            $icon.text('▲');
+        }
+    });
+
+    // SETTINGS DASHBOARD ACCORDIONS
     $('.tcc-accordion-header').on('click', function() {
         let $body = $(this).next('.tcc-accordion-body');
         $('.tcc-accordion-body').not($body).slideUp(150);
@@ -75,12 +120,18 @@ jQuery(document).ready(function($) {
             $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_fetch_hotel_names', dest: dest, place: place, cat: cat }, function(res) {
                 $hotelDrop.empty();
                 if(res.success && res.data.length > 0) {
-                    $.each(res.data, function(i, name) { $hotelDrop.append(`<option value="${name}">${name}</option>`); });
+                    $.each(res.data, function(i, item) { 
+                        let hName = typeof item === 'object' ? item.hotel_name : item;
+                        let hLink = typeof item === 'object' ? (item.hotel_website || '') : '';
+                        $hotelDrop.append(`<option value="${hName}" data-link="${hLink}">${hName}</option>`); 
+                    });
                     
                     if(preValue) {
                         $hotelDrop.val(preValue.split(','));
                     } else {
-                        $hotelDrop.val([res.data[0]]); 
+                        // Res.data can be array of objects now
+                        let firstVal = typeof res.data[0] === 'object' ? res.data[0].hotel_name : res.data[0];
+                        $hotelDrop.val([firstVal]); 
                     }
                 } else {
                     $hotelDrop.append('<option value="">No Hotels Saved</option>');
@@ -243,14 +294,15 @@ jQuery(document).ready(function($) {
     $(document).on('click', '.remove_stay_place', function() { $(this).closest('.night-stay-row').remove(); triggerLiveCalculation(); });
 
     function validateCalculator() {
-        let pax = parseInt($('#total_pax').val()) || 0;
+        let pax = parseInt($('#total_pax').val());
+        if (isNaN(pax) || pax <= 0) return "Enter No. of Adults.";
+        
         let child = parseInt($('#child_pax').val()) || 0;
         let rooms = parseInt($('#no_of_rooms').val()) || 0;
         let extra_beds = parseInt($('#extra_beds').val()) || 0;
         let total_days = parseInt($('#total_days').val()) || 0;
         let expected_nights = total_days > 0 ? total_days - 1 : 0;
 
-        if (!$('#start_date').val()) return "Select Start Date.";
         if (extra_beds > rooms) return "Max 1 Extra Bed/room.";
         if (child > rooms) return "Max 1 Child (<6yr)/room.";
         if ((rooms * 2) + extra_beds < pax) return `Not enough beds for ${pax} Adults.`;
@@ -270,9 +322,12 @@ jQuery(document).ready(function($) {
         }
     });
 
+    window.tccLiveSummaryData = null; // Store for copy buttons
+
     function triggerLiveCalculation() {
         $('#live_error').hide();
         $('#tcc_link_wrapper').slideUp(); 
+        window.tccLiveSummaryData = null; 
         
         let validationError = validateCalculator();
         if (validationError) {
@@ -301,6 +356,7 @@ jQuery(document).ready(function($) {
                 $('#live_pp_base, #live_pp_inc, #live_profit, #live_discount, #live_total, #live_gst').css('opacity', '1');
                 if(res.success) {
                     let d = res.data;
+                    window.tccLiveSummaryData = d.summary_data; // Cache for buttons
                     
                     $('#live_pp_base').text(formatINR(d.summary_data.per_person_excl_gst));
                     $('#live_pp_inc').text(formatINR(d.summary_data.per_person_with_gst));
@@ -399,6 +455,165 @@ jQuery(document).ready(function($) {
         });
     });
 
+    function sanitizeCopyText(text) {
+        if (!text) return "";
+        let parts = text.split(/(https?:\/\/[^\s\]]+)/g);
+        for(let i=0; i<parts.length; i++) {
+            if (!parts[i].startsWith('http')) {
+                parts[i] = parts[i].replace(/&/g, 'and');
+            }
+        }
+        return parts.join('');
+    }
+
+    function copyToClipboardStr(text, $btn) {
+        text = sanitizeCopyText(text);
+
+        let copyTextarea = document.createElement("textarea");
+        document.body.appendChild(copyTextarea);
+        copyTextarea.value = text;
+        copyTextarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(copyTextarea);
+
+        let originalText = $btn.text();
+        $btn.text("Copied!");
+        setTimeout(function() { $btn.text(originalText); }, 2000);
+    }
+
+    function formatBullets(text, bullet) {
+        if(!text) return "None specified.";
+        return text.split(/\r\n|\n|\r/).filter(line => line.trim() !== '').map(line => `${bullet} ${line.trim()}`).join('\n');
+    }
+
+    function buildHotelsText(stays) {
+        let msg = `*Hotels Selected*\n`;
+        if (stays && stays.length > 0) {
+            stays.forEach(stay => {
+                let cat = stay.category || '';
+                let stars = cat.toLowerCase().includes('4') ? '⭐⭐⭐⭐' : (cat.toLowerCase().includes('5') ? '⭐⭐⭐⭐⭐' : '⭐⭐⭐');
+                msg += `${stars} ${stay.place} (${stay.nights}N): [${cat}]\n`;
+                if (stay.options && stay.options.length > 0) {
+                    stay.options.forEach(opt => {
+                        let linkStr = opt.link ? ` [${opt.link}]` : '';
+                        msg += `${opt.name}${linkStr}\n`;
+                    });
+                } else {
+                    msg += `None selected\n`;
+                }
+            });
+        } else {
+            msg += `No hotels selected.\n`;
+        }
+        return msg;
+    }
+
+    // GATHER DATA IF UNCALCULATED
+    function getCopyDataUncalculated() {
+        if (window.tccLiveSummaryData) return window.tccLiveSummaryData;
+
+        let dest = $('#calc_destination').val();
+        let master = (typeof tccMasterData !== 'undefined' && tccMasterData[dest]) ? tccMasterData[dest] : {};
+
+        let itinerary = [];
+        let itinerary_stay_places = [];
+        $('#day-wise-wrapper .tcc-day-row').each(function() {
+            let text = $(this).find('.tcc-day-input').val();
+            let stay = $(this).find('.tcc-day-stay-place').val();
+            if(text && text.trim() !== '') {
+                itinerary.push(text.trim());
+                itinerary_stay_places.push(stay || '');
+            }
+        });
+
+        let stays = [];
+        $('.night-stay-row').each(function() {
+            let place = $(this).find('.stay_place_dropdown').val();
+            let cat = $(this).find('.stay_cat_dropdown').val();
+            let nights = $(this).find('.stay_nights').val();
+            
+            let opts = [];
+            $(this).find('.stay_hotel_dropdown option:selected').each(function() {
+                opts.push({ name: $(this).val(), link: $(this).data('link') || '' });
+            });
+
+            if (place && nights) {
+                stays.push({place: place, category: cat, nights: nights, options: opts});
+            }
+        });
+
+        return {
+            inclusions: master.inclusions || '',
+            exclusions: master.exclusions || '',
+            payment_terms: master.payment_terms || '',
+            itinerary: itinerary,
+            itinerary_stay_places: itinerary_stay_places,
+            stays: stays
+        };
+    }
+
+    // --- QUICK COPY ACTION BUTTONS ---
+
+    $('#tcc_quick_wa_btn').on('click', function() {
+        if (!window.tccLiveSummaryData) return alert("Please calculate trip first to copy the Summary with Prices.");
+        let d = window.tccLiveSummaryData;
+
+        let totalValue = $('#live_total').text();
+        let gstPct = (typeof tccGlobalSettings !== 'undefined' && tccGlobalSettings.gst) ? tccGlobalSettings.gst : 5;
+
+        let msg = `Soulful Tour & Travels (Soulful Pathfinder)\nGSTIN: 19AXIPD7432L1Z5\n\n`;
+        msg += `Travelers: ${d.pax} Adults, ${d.child} Children\n\n`;
+        msg += `Inclusions:\n`;
+        msg += `🏨 Room: ${d.rooms} Room${d.rooms > 1 ? 's' : ''} + ${d.extra_beds} Extra Bed${d.extra_beds > 1 ? 's' : ''}\n`;
+        msg += `🚗 Vehicle: ${d.transport_string}\n\n`;
+        msg += `Grand Total: ${totalValue} (Total Value)\n`;
+        msg += `✓ Inclusive of ${gstPct}% GST\n\n`;
+        msg += `Visit-https://soulfultourtravels.in/`;
+
+        copyToClipboardStr(msg, $(this));
+    });
+
+    $('#tcc_copy_itinerary_btn').on('click', function() {
+        let d = getCopyDataUncalculated();
+        if(!d.itinerary || d.itinerary.length === 0) return alert("Please fill up the Itinerary properly first.");
+        
+        let msg = `*Itinerary Details*\n`;
+        d.itinerary.forEach((day_text, idx) => {
+            let stay = (d.itinerary_stay_places && d.itinerary_stay_places[idx]) ? d.itinerary_stay_places[idx] : '';
+            let stay_suffix = stay ? ` n/s-${stay}` : '';
+            msg += `👉Day ${idx + 1}: ${day_text}${stay_suffix}\n`;
+        });
+
+        msg += `\n`;
+        msg += buildHotelsText(d.stays);
+
+        msg += `\n*Included in Package*\n`;
+        msg += formatBullets(d.inclusions, '✅') + `\n`;
+
+        copyToClipboardStr(msg, $(this));
+    });
+
+    $('#tcc_copy_hotels_btn').on('click', function() {
+        let d = getCopyDataUncalculated();
+        copyToClipboardStr(buildHotelsText(d.stays), $(this));
+    });
+
+    $('#tcc_copy_inclusions_btn').on('click', function() {
+        let d = getCopyDataUncalculated();
+        copyToClipboardStr(`*Included in Package*\n` + formatBullets(d.inclusions, '✅'), $(this));
+    });
+
+    $('#tcc_copy_exclusions_btn').on('click', function() {
+        let d = getCopyDataUncalculated();
+        copyToClipboardStr(`*Excluded from Package*\n` + formatBullets(d.exclusions, '❌'), $(this));
+    });
+
+    $('#tcc_copy_payment_btn').on('click', function() {
+        let d = getCopyDataUncalculated();
+        copyToClipboardStr(`*Payment Terms*\n` + formatBullets(d.payment_terms, '💳'), $(this));
+    });
+
+    // --- SUCCESS COPY ACTIONS (Using full quote data) ---
     $('#tcc_copy_btn').on('click', function() {
         let copyText = document.getElementById("tcc_generated_link");
         copyText.select();
@@ -431,17 +646,14 @@ jQuery(document).ready(function($) {
             let options = { day: 'numeric', month: 'short', year: 'numeric' };
             return new Date(dateStr).toLocaleDateString('en-GB', options);
         }
-        
-        function formatBullets(text) {
-            if(!text) return "None specified.";
-            return text.split(/\r\n|\n|\r/).filter(line => line.trim() !== '').map(line => `✓ ${line.trim()}`).join('\n');
-        }
 
         let msg = `*SOULFUL TOUR & TRAVELS*\n`;
         msg += `GSTIN: 19AXIPD7432L1Z5\n\n`;
         if(d.client_name) msg += `*Client Name:* ${d.client_name}\n`;
         msg += `*Your Quotation for ${d.destination}*\n`;
-        msg += `*Trip Date:* ${formatDate(d.start_date)} to ${formatDate(d.end_date)}\n`;
+        if (d.start_date) {
+            msg += `*Trip Date:* ${formatDate(d.start_date)} to ${formatDate(d.end_date)}\n`;
+        }
         msg += `*Duration:* ${d.days} Days / ${d.days > 0 ? d.days - 1 : 0} Nights\n`;
         msg += `*Travelers:* ${d.pax} Adults, ${d.child} Child\n`;
         msg += `*Rooms & Beds:* ${d.rooms} Rooms / ${d.extra_beds} Extra Beds\n`;
@@ -457,19 +669,10 @@ jQuery(document).ready(function($) {
             msg += `\n`;
         }
 
-        msg += `*Hotels Selected:*\n`;
-        if(d.stays && d.stays.length > 0) {
-            d.stays.forEach(function(stay) {
-                let hotelNames = stay.options.map(o => o.name).join(" OR ");
-                let catText = stay.category ? `[${stay.category}] ` : '';
-                msg += `- ${stay.place} (${stay.nights}N): ${catText}${hotelNames} / Similar\n`;
-            });
-        } else {
-            msg += `No hotels selected.\n`;
-        }
+        msg += buildHotelsText(d.stays) + `\n`;
         
-        msg += `\n*Included in Package:*\n`;
-        msg += `${formatBullets(d.inclusions)}\n`;
+        msg += `*Included in Package:*\n`;
+        msg += `${formatBullets(d.inclusions, '✓')}\n`;
         
         msg += `\n*Pricing Summary:*\n`;
         msg += `Per Person (Excl. GST): ${pp_base}\n`;
@@ -481,17 +684,7 @@ jQuery(document).ready(function($) {
 
         msg += `*View Detailed Itinerary, Receipts & Quote here:*\n${link}`;
 
-        let copyTextarea = document.createElement("textarea");
-        document.body.appendChild(copyTextarea);
-        copyTextarea.value = msg;
-        copyTextarea.select();
-        document.execCommand("copy");
-        document.body.removeChild(copyTextarea);
-
-        let $btn = $(this);
-        let originalText = $btn.text();
-        $btn.text("Copied!");
-        setTimeout(function(){ $btn.text(originalText); }, 2000);
+        copyToClipboardStr(msg, $(this));
     });
 
     // --- DAY WISE LOGIC WITH AUTO STAY-SYNC --- //
@@ -586,6 +779,7 @@ jQuery(document).ready(function($) {
                 <div class="tcc-day-label" style="background:#e2e8f0; padding:8px 8px; font-size:11px; font-weight:bold; border:1px solid #ccc; border-right:none; border-left:none; width:55px; text-align:center; display:flex; align-items:center; justify-content:center;">Day ${i}</div>
                 <input type="text" name="itinerary_day[]" class="tcc-day-input" value="${val}" placeholder="E.g. Arrival at Srinagar" style="border-radius:0; margin-bottom:0; flex:1;" required>
                 ${stayDropdownHtml}
+                <button type="button" class="tcc-remove-day tcc-btn-del" style="border-radius:0 3px 3px 0; border-left:none; padding:4px 10px !important;" title="Remove Day">X</button>
             </div>`;
             
             let $newRow = $(row);
@@ -594,6 +788,22 @@ jQuery(document).ready(function($) {
         }
         if (typeof Sortable === 'undefined') { $.getScript('https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js', initSortable); } else { initSortable(); }
     }
+
+    // --- ADD / REMOVE DAY LOGIC ---
+    $('#tcc_add_day_btn').on('click', function() {
+        let days = parseInt($('#total_days').val()) || 0;
+        $('#total_days').val(days + 1).trigger('input');
+    });
+
+    $(document).on('click', '.tcc-remove-day', function() {
+        $(this).closest('.tcc-day-row').remove();
+        let days = parseInt($('#total_days').val()) || 0;
+        if (days > 1) {
+            $('#total_days').val(days - 1).trigger('input');
+        } else {
+            triggerLiveCalculation();
+        }
+    });
 
     $('#total_days').on('input', generateDayInputs);
     
@@ -719,6 +929,28 @@ jQuery(document).ready(function($) {
                 setTimeout(function(){ $('#itinerary_preset_select').val(presetName).trigger('change'); }, 500); 
             } else {
                 $('#preset_msg').text('Error saving').css('color', 'red').fadeIn().delay(3000).fadeOut();
+            }
+        });
+    });
+
+    // FIXED DELETE PRESET LOGIC
+    $('#delete_itinerary_preset').on('click', function() {
+        let presetName = $('#itinerary_preset_select').val();
+        let dest = $('#calc_destination').val();
+        if(!presetName || !dest) return;
+        if(!confirm("Are you sure you want to permanently delete the preset '" + presetName + "'?")) return;
+
+        $.post(tcc_ajax_obj.ajax_url, {
+            action: 'tcc_delete_itinerary_preset',
+            preset_name: presetName,
+            destination: dest
+        }, function(res) {
+            if(res.success) {
+                $('#preset_msg').text('Deleted successfully!').css('color', '#dc2626').fadeIn().delay(2000).fadeOut();
+                loadPresets();
+                $('#new_preset_name').val('');
+            } else {
+                alert("Error deleting preset.");
             }
         });
     });
@@ -913,17 +1145,7 @@ jQuery(document).ready(function($) {
         if(!qid) return;
         let quoteData = window.tccAllQuotes.find(q => q.id == qid);
         if(quoteData && quoteData.link) {
-            let tempInput = document.createElement("input");
-            document.body.appendChild(tempInput);
-            tempInput.value = quoteData.link;
-            tempInput.select();
-            document.execCommand("copy");
-            document.body.removeChild(tempInput);
-            
-            let $btn = $(this);
-            let originalText = $btn.text();
-            $btn.text("Copied!");
-            setTimeout(function(){ $btn.text(originalText); }, 2000);
+            copyToClipboardStr(quoteData.link, $(this));
         }
     });
 
@@ -1247,7 +1469,10 @@ jQuery(document).ready(function($) {
                 let $dd = $('#hotel_name_dropdown');
                 $dd.empty().append('<option value="">-- Add/Select --</option>');
                 if(res.success && res.data.length > 0) {
-                    $.each(res.data, function(i, name) { $dd.append(`<option value="${name}">${name}</option>`); });
+                    $.each(res.data, function(i, item) { 
+                        let hName = typeof item === 'object' ? item.hotel_name : item;
+                        $dd.append(`<option value="${hName}">${hName}</option>`); 
+                    });
                 }
                 $dd.append('<option value="ADD_NEW" style="font-weight:bold; color:#108043;">+ ADD NEW</option>');
                 $dd.val('').trigger('change');
@@ -1600,7 +1825,6 @@ jQuery(document).ready(function($) {
     });
 
     $('#tcc-notes-filter').on('change', function() {
-        // Trigger a re-render from the globally stored notes when the filter changes
         if(window.tccGlobalNotes) {
             renderNotes(window.tccGlobalNotes);
         }
@@ -1610,7 +1834,7 @@ jQuery(document).ready(function($) {
         $('#tcc-notes-list').html('<div style="text-align:center; color:#64748b;">Loading notes...</div>');
         $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_load_notes' }, function(res) {
             if(res.success) {
-                window.tccGlobalNotes = res.data; // Cache globally for quick filtering
+                window.tccGlobalNotes = res.data; 
                 renderNotes(res.data);
             }
         });
@@ -1648,7 +1872,6 @@ jQuery(document).ready(function($) {
         }
         $('#tcc-notes-list').html(html);
 
-        // Update Filters & Datalist dynamically based on the available groups
         let currentFilter = $('#tcc-notes-filter').val();
         let filterOptions = '<option value="All">All Groups</option>';
         let datalistOptions = '';
@@ -1678,7 +1901,7 @@ jQuery(document).ready(function($) {
                 $('#tcc-new-note-text').val('');
                 $('#tcc-edit-note-id').val('');
                 $('#tcc-cancel-edit-note').hide();
-                window.tccGlobalNotes = res.data; // Update cache
+                window.tccGlobalNotes = res.data; 
                 renderNotes(res.data);
             }
         });
@@ -1710,7 +1933,7 @@ jQuery(document).ready(function($) {
         let id = $(this).data('id');
         $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_delete_note', note_id: id }, function(res) {
             if(res.success) {
-                window.tccGlobalNotes = res.data; // Update cache
+                window.tccGlobalNotes = res.data; 
                 renderNotes(res.data);
             }
         });
@@ -1718,17 +1941,7 @@ jQuery(document).ready(function($) {
 
     $(document).on('click', '.tcc-copy-note', function() {
         let text = decodeURIComponent($(this).data('text'));
-        let textarea = document.createElement('textarea');
-        textarea.value = text;
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-        
-        let btn = $(this);
-        let origText = btn.text();
-        btn.text('Copied!');
-        setTimeout(() => btn.text(origText), 1500);
+        copyToClipboardStr(text, $(this));
     });
 
 });
