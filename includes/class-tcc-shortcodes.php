@@ -624,8 +624,10 @@ function tcc_render_settings_dashboard() {
                     <div id="tcc-add-payment-wrapper">
                         <h4 style="margin:0 0 10px 0; font-size:14px; color:#334155;">Record New Transaction</h4>
                         <form id="tcc-add-payment-form" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px;">
+                            <input type="hidden" id="pmt_edit_id" value="">
                             <input type="date" id="pmt_date" required style="flex:1; min-width:120px;" title="Transaction Date">
-                            <input type="number" id="pmt_amount" placeholder="Amount (₹)" step="0.01" min="1" required style="flex:1; min-width:100px;">
+                            <input type="number" id="pmt_amount" placeholder="Amount (₹) *" step="0.01" min="1" required style="flex:1; min-width:100px;">
+                            <input type="number" id="pmt_pg_fee" step="0.01" min="0" placeholder="PG Fee (₹) *" required style="padding:8px 12px; border-radius:4px; border:1px solid #ccc; flex:1; min-width:110px;" title="Actual PG fee deducted (Type 0 if none)">
                             <select id="pmt_method" required style="flex:1; min-width:120px;">
                                 <option value="UPI">UPI</option>
                                 <option value="Bank Transfer">Bank Transfer</option>
@@ -635,6 +637,7 @@ function tcc_render_settings_dashboard() {
                             </select>
                             <input type="text" id="pmt_ref" placeholder="Txn Ref / Details" style="flex:2; min-width:150px;">
                             <button type="submit" class="tcc-btn-primary" style="margin:0; flex:1; min-width:100px;">Add Record</button>
+                            <button type="button" id="pmt_cancel_edit_btn" class="tcc-btn-secondary" style="display:none; margin:0; flex:0.5; min-width:80px;">Cancel</button>
                         </form>
                     </div>
 

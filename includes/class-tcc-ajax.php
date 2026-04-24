@@ -909,24 +909,30 @@ function tcc_load_quote_payments() {
 
     $total_paid = 0;
     $total_refunded = 0;
+    $total_actual_pg = 0; 
     $has_refund = false;
 
     foreach($payments as $p) { 
+        $pg_fee = isset($p['pg_fee']) ? floatval($p['pg_fee']) : 0;
         if (isset($p['method']) && $p['method'] === 'Refund') {
             $total_refunded += floatval($p['amount']);
             $has_refund = true;
         } else {
             $total_paid += floatval($p['amount']); 
+            $total_actual_pg += $pg_fee; 
         }
     }
     
     $is_cancelled = ($has_refund || $status === 'Canceled');
     $retained_income = max(0, $total_paid - $total_refunded);
     $balance = $is_cancelled ? 0 : max(0, $grand_total - $total_paid);
+    $net_in_bank = $total_paid - $total_actual_pg; 
 
     wp_send_json_success(array(
         'grand_total' => $grand_total,
         'total_paid' => $total_paid,
+        'total_actual_pg' => $total_actual_pg,
+        'net_in_bank' => $net_in_bank,
         'total_refunded' => $total_refunded,
         'retained_income' => $retained_income,
         'balance' => $balance,
@@ -938,7 +944,10 @@ function tcc_load_quote_payments() {
 function tcc_add_payment() {
     if ( ! is_user_logged_in() ) wp_die();
     $post_id = intval($_POST['quote_id']);
+    $pmt_id = isset($_POST['pmt_id']) ? sanitize_text_field($_POST['pmt_id']) : '';
+    
     $amount = floatval($_POST['amount']);
+    $pg_fee = isset($_POST['pg_fee']) ? floatval($_POST['pg_fee']) : 0;
     $date = sanitize_text_field($_POST['date']);
     $method = sanitize_text_field($_POST['method']);
     $ref = sanitize_text_field($_POST['ref']);
@@ -948,15 +957,28 @@ function tcc_add_payment() {
     $payments = get_post_meta($post_id, 'tcc_payments', true);
     if(!is_array($payments)) $payments = [];
 
-    $new_payment = array(
-        'id' => uniqid('pmt_'),
-        'amount' => $amount,
-        'date' => $date,
-        'method' => $method,
-        'ref' => $ref
-    );
+    if ($pmt_id) {
+        foreach($payments as &$p) {
+            if($p['id'] === $pmt_id) {
+                $p['amount'] = $amount;
+                $p['pg_fee'] = $pg_fee;
+                $p['date'] = $date;
+                $p['method'] = $method;
+                $p['ref'] = $ref;
+                break;
+            }
+        }
+    } else {
+        $payments[] = array(
+            'id' => uniqid('pmt_'),
+            'amount' => $amount,
+            'pg_fee' => $pg_fee, 
+            'date' => $date,
+            'method' => $method,
+            'ref' => $ref
+        );
+    }
     
-    $payments[] = $new_payment;
     update_post_meta($post_id, 'tcc_payments', $payments);
     
     if ($method === 'Refund') {

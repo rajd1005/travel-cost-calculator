@@ -1397,6 +1397,7 @@ jQuery(document).ready(function($) {
     $('#pmt_quote_select').on('change', function() {
         let qid = $(this).val();
         $('#pmt_edit_client_wrapper').hide();
+        $('#pmt_cancel_edit_btn').trigger('click'); // Reset edit state if switching quotes
 
         if(!qid) { 
             $('#pmt_dashboard').slideUp(); 
@@ -1565,7 +1566,8 @@ jQuery(document).ready(function($) {
         if($(this).val() === 'Refund') {
             btn.text('Process Refund').css({'background': '#dc2626', 'border-color': '#b91c1c'});
         } else {
-            btn.text('Add Record').removeAttr('style');
+            let btnText = $('#pmt_edit_id').val() ? 'Update Record' : 'Add Record';
+            btn.text(btnText).removeAttr('style');
             btn.css({'margin': '0', 'flex': '1', 'min-width': '100px'});
         }
     });
@@ -1585,8 +1587,8 @@ jQuery(document).ready(function($) {
                     $('#pmt_balance_val').text(formatINR(res.data.retained_income)).css('color', '#16a34a');
                 } else {
                     $('#pmt_total_val').text(formatINR(res.data.grand_total));
-                    $('#pmt_received_val').parent().find('div:first').text('TOTAL RECEIVED');
-                    $('#pmt_received_val').text(formatINR(res.data.total_paid)).css('color', '#16a34a');
+                    $('#pmt_received_val').parent().find('div:first').text('RECEIVED (GROSS)');
+                    $('#pmt_received_val').html(`${formatINR(res.data.total_paid)}<br><span style="font-size:11px; color:#64748b; font-weight:normal;">Net in Bank: ${formatINR(res.data.net_in_bank)}</span>`).css('color', '#16a34a');
                     $('#pmt_balance_val').parent().find('div:first').text('BALANCE DUE');
                     $('#pmt_balance_val').text(formatINR(res.data.balance)).css('color', '#dc2626');
                 }
@@ -1595,19 +1597,27 @@ jQuery(document).ready(function($) {
                 if(res.data.payments.length > 0) {
                     phtml += `<table style="width:100%; border-collapse:collapse; font-size:12px; text-align:left;">
                         <tr style="background:#f1f5f9; border-bottom:1px solid #e2e8f0;">
-                            <th style="padding:8px;">Date</th><th style="padding:8px;">Amount</th><th style="padding:8px;">Method</th><th style="padding:8px;">Ref</th><th style="padding:8px;">Action</th>
+                            <th style="padding:8px;">Date</th><th style="padding:8px;">Gross Amt</th><th style="padding:8px; color:#dc2626;">PG Cut</th><th style="padding:8px; color:#16a34a;">Net Bank</th><th style="padding:8px;">Method</th><th style="padding:8px;">Ref</th><th style="padding:8px; text-align:right;">Action</th>
                         </tr>`;
                     $.each(res.data.payments, function(i, p) {
                         let isRefund = (p.method === 'Refund');
                         let amtColor = isRefund ? '#dc2626' : '#16a34a';
                         let amtPrefix = isRefund ? '-' : '';
+                        
+                        let pgFee = p.pg_fee ? parseFloat(p.pg_fee) : 0;
+                        let netBank = parseFloat(p.amount) - pgFee;
 
                         phtml += `<tr style="border-bottom:1px solid #f1f5f9;">
                             <td style="padding:8px;">${p.date}</td>
                             <td style="padding:8px; font-weight:bold; color:${amtColor};">${amtPrefix}${formatINR(p.amount)}</td>
+                            <td style="padding:8px; color:#dc2626;">${pgFee > 0 ? '-' + formatINR(pgFee) : '-'}</td>
+                            <td style="padding:8px; font-weight:bold; color:#16a34a;">${amtPrefix}${formatINR(netBank)}</td>
                             <td style="padding:8px;">${p.method}</td>
                             <td style="padding:8px; color:#64748b;">${p.ref}</td>
-                            <td style="padding:8px;"><button type="button" class="del-payment-btn" data-id="${p.id}" style="background:none; border:none; color:#dc2626; cursor:pointer; text-decoration:underline;">Delete</button></td>
+                            <td style="padding:8px; text-align:right;">
+                                <button type="button" class="edit-payment-btn" data-id="${p.id}" data-date="${p.date}" data-amt="${p.amount}" data-pg="${pgFee}" data-method="${p.method}" data-ref="${p.ref}" style="background:none; border:none; color:#0284c7; cursor:pointer; text-decoration:underline; margin-right:8px;">Edit</button>
+                                <button type="button" class="del-payment-btn" data-id="${p.id}" style="background:none; border:none; color:#dc2626; cursor:pointer; text-decoration:underline;">Delete</button>
+                            </td>
                         </tr>`;
                     });
                     phtml += `</table>`;
@@ -1619,6 +1629,32 @@ jQuery(document).ready(function($) {
             }
         });
     }
+
+    // Load payment into Edit form
+    $(document).on('click', '.edit-payment-btn', function() {
+        let p = $(this).data();
+        $('#pmt_edit_id').val(p.id);
+        $('#pmt_date').val(p.date);
+        $('#pmt_amount').val(p.amt);
+        $('#pmt_pg_fee').val(p.pg);
+        $('#pmt_method').val(p.method).trigger('change');
+        $('#pmt_ref').val(p.ref);
+        
+        let btn = $('#tcc-add-payment-form button[type="submit"]');
+        if(p.method !== 'Refund') {
+            btn.text('Update Record');
+        }
+        $('#pmt_cancel_edit_btn').show();
+        $('html, body').animate({ scrollTop: $('#tcc-add-payment-wrapper').offset().top - 50 }, 300);
+    });
+
+    $('#pmt_cancel_edit_btn').on('click', function() {
+        $('#tcc-add-payment-form')[0].reset();
+        $('#pmt_edit_id').val('');
+        let btn = $('#tcc-add-payment-form button[type="submit"]');
+        btn.text('Add Record').removeAttr('style').css({'margin': '0', 'flex': '1', 'min-width': '100px'});
+        $(this).hide();
+    });
 
     $('#tcc-add-payment-form').on('submit', function(e) {
         e.preventDefault();
@@ -1632,7 +1668,9 @@ jQuery(document).ready(function($) {
         let data = {
             action: 'tcc_add_payment',
             quote_id: qid,
+            pmt_id: $('#pmt_edit_id').val(),
             amount: $('#pmt_amount').val(),
+            pg_fee: $('#pmt_pg_fee').val(),
             date: $('#pmt_date').val(),
             method: $('#pmt_method').val(),
             ref: $('#pmt_ref').val()
@@ -1641,7 +1679,7 @@ jQuery(document).ready(function($) {
         $.post(tcc_ajax_obj.ajax_url, data, function(res) {
             btn.prop('disabled', false).text(originalText);
             if(res.success) {
-                $('#pmt_amount, #pmt_ref').val('');
+                $('#pmt_cancel_edit_btn').trigger('click'); // Reset everything perfectly
                 refreshPaymentDashboard();
             }
         });
@@ -1653,7 +1691,10 @@ jQuery(document).ready(function($) {
         let qid = $('#pmt_quote_select').val();
         
         $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_delete_payment', quote_id: qid, pmt_id: pmt_id }, function(res) {
-            if(res.success) refreshPaymentDashboard();
+            if(res.success) {
+                $('#pmt_cancel_edit_btn').trigger('click');
+                refreshPaymentDashboard();
+            }
         });
     });
 

@@ -23,6 +23,8 @@ function tcc_enqueue_scripts() {
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-tcc-shortcodes.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-tcc-ajax.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-tcc-followup.php'; // NEW: Follow-up Dashboard Module
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-tcc-expenses.php'; 
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-tcc-expenses-ajax.php';
 
 // REGISTER CUSTOM POST TYPE FOR QUOTES
 add_action( 'init', 'tcc_register_quote_cpt' );
