@@ -12,60 +12,61 @@
 /* Ultra-Compact Panels */
 .tcc-card {
     background: #fff;
-    padding: 8px 10px;
-    margin-bottom: 8px;
+    padding: 12px 15px;
+    margin-bottom: 12px;
     border: 1px solid #e2e8f0;
-    border-radius: 3px;
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
 }
 
 .tcc-card-title {
-    font-size: 14px;
-    font-weight: bold;
-    margin: 0 0 6px 0;
-    color: #111;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 4px;
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0 0 10px 0;
+    color: #0f172a;
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 8px;
 }
 
 /* Grids (Tight Spacing) */
-.tcc-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
-.tcc-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 4px; }
+.tcc-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 6px; }
+.tcc-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 6px; }
 
 /* Native-Style Form Elements */
-.tcc-form-group { margin-bottom: 4px; }
+.tcc-form-group { margin-bottom: 8px; }
 .tcc-form label {
     display: block;
     font-size: 12px;
     font-weight: 600;
-    color: #444;
-    margin-bottom: 2px;
+    color: #475569;
+    margin-bottom: 4px;
 }
 .tcc-form input, .tcc-form select, .tcc-form textarea {
     width: 100%;
     border-radius: 3px;
-    border: 1px solid #ccc;
+    border: 1px solid #cbd5e1;
     background: #fff;
-    font-size: 12px;
-    color: #333;
+    font-size: 13px;
+    color: #1e293b;
     margin-bottom: 0 !important;
 }
 
 .tcc-form input, .tcc-form select {
-    height: 28px !important;
-    padding: 2px 6px;
+    height: 32px !important;
+    padding: 4px 8px;
 }
 
 /* Multi-select specific height fix */
 .tcc-form select[multiple] { 
-    height: 45px !important; 
-    padding: 2px; 
+    height: 55px !important; 
+    padding: 4px; 
     overflow-y: auto;
 }
 
 .tcc-form input:focus, .tcc-form select:focus, .tcc-form textarea:focus {
     border-color: #b93b59;
     outline: none;
-    box-shadow: 0 0 3px rgba(185, 59, 89, 0.2);
+    box-shadow: 0 0 0 2px rgba(185, 59, 89, 0.1);
 }
 
 /* Repeaters (Transport & Hotels) */
@@ -73,14 +74,15 @@
     display: flex;
     gap: 6px;
     align-items: center;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
 }
 .tcc-repeater-row > * { flex: 1; }
 
 /* BUTTONS */
 .tcc-wrapper .tcc-btn-primary, 
 .tcc-wrapper .tcc-btn-secondary, 
-.tcc-wrapper .tcc-repeater-row .tcc-btn-del {
+.tcc-wrapper .tcc-repeater-row .tcc-btn-del,
+.tcc-wrapper .tcc-btn-del {
     background-color: transparent !important; 
     color: #b93b59 !important;                
     border: 1px solid #b93b59 !important;     
@@ -88,75 +90,83 @@
     padding: 4px 12px !important;
     border-radius: 3px !important;
     cursor: pointer !important;
-    font-weight: normal !important;
+    font-weight: 600 !important;
     text-align: center !important;
     transition: 0.2s ease !important;
-    display: inline-block !important;
-    height: 28px !important; 
-    line-height: 1.2 !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    height: 32px !important; 
     box-shadow: none !important;
 }
 
 .tcc-wrapper .tcc-btn-primary {
-    width: auto !important;
+    background-color: #b93b59 !important;
+    color: #ffffff !important;
     min-width: 150px !important;
     margin-top: 10px !important;
 }
 
+.tcc-wrapper .tcc-btn-primary:hover {
+    background-color: #9d314b !important;
+}
+
 /* Hover effects */
-.tcc-wrapper .tcc-btn-primary:hover, 
 .tcc-wrapper .tcc-btn-secondary:hover, 
-.tcc-wrapper .tcc-repeater-row .tcc-btn-del:hover { 
-    background-color: #b93b59 !important; 
-    color: #ffffff !important;
+.tcc-wrapper .tcc-repeater-row .tcc-btn-del:hover,
+.tcc-wrapper .tcc-btn-del:hover { 
+    background-color: #f1f5f9 !important; 
+    color: #9d314b !important;
+}
+
+.tcc-wrapper .tcc-btn-del {
+    background-color: #fee2e2 !important;
+    color: #dc2626 !important;
+    border-color: #f87171 !important;
+}
+.tcc-wrapper .tcc-btn-del:hover {
+    background-color: #fecaca !important;
 }
 
 .tcc-wrapper .tcc-repeater-row .tcc-btn-del {
-    flex: 0 0 28px !important;
+    flex: 0 0 32px !important;
     padding: 0 !important;
-    line-height: 26px !important;
 }
 
 /* Light & Clean Live Preview Panel */
 .tcc-preview-panel { 
     background: #f8fafc; 
     border: 1px solid #e2e8f0;
-    border-radius: 3px; 
-    padding: 8px; 
-    margin-top: 6px; 
+    border-radius: 4px; 
+    padding: 12px; 
+    margin-top: 8px; 
     color: #333;
 }
-.tcc-preview-val { font-size: 18px; font-weight: bold; color: #3182ce; }
+.tcc-preview-val { font-size: 20px; font-weight: 800; color: #0f172a; }
 .tcc-preview-profit { color: #16a34a; }
 .tcc-preview-loss { color: #dc2626; }
 .tcc-preview-sub { 
     display: flex; 
     justify-content: space-between; 
-    font-size: 11px; 
-    margin-top: 5px; 
-    padding-top: 5px; 
+    font-size: 12px; 
+    margin-top: 8px; 
+    padding-top: 8px; 
     border-top: 1px dashed #cbd5e1; 
 }
 
 /* Accordions for Settings */
-.tcc-accordion { margin-bottom: 5px; border: 1px solid #ddd; border-radius: 3px; }
+.tcc-accordion { margin-bottom: 6px; border: 1px solid #cbd5e1; border-radius: 4px; }
 .tcc-accordion-header {
-    background: #f9f9f9;
-    padding: 6px 10px;
-    font-size: 13px;
-    font-weight: bold;
+    background: #f8fafc;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-weight: 700;
     cursor: pointer;
     display: flex;
     justify-content: space-between;
+    color: #1e293b;
 }
-.tcc-accordion-body { padding: 8px; display: none; background: #fff; }
-
-/* Mobile Optimizations */
-@media (max-width: 500px) {
-    .tcc-grid-3, .tcc-grid-2 { grid-template-columns: 1fr; gap: 4px; }
-    .tcc-repeater-row { flex-direction: column; align-items: stretch; border: 1px solid #eee; padding: 4px; border-radius: 3px; }
-    .tcc-wrapper .tcc-repeater-row .tcc-btn-del { flex: auto !important; height: 28px !important; margin-top: 2px !important; }
-}
+.tcc-accordion-body { padding: 12px; display: none; background: #fff; }
 
 /* --- MULTI-STEP WIZARD STYLES --- */
 .tcc-step {
@@ -181,4 +191,117 @@
     padding: 12px;
     margin-top: 15px;
     margin-bottom: 15px;
+}
+
+/* --- RICH TEXT EDITOR STYLES --- */
+.tcc-rte-container {
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    background: #fff;
+    overflow: hidden;
+}
+.tcc-rte-toolbar {
+    background: #f1f5f9;
+    padding: 6px;
+    border-bottom: 1px solid #cbd5e1;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.tcc-rte-btn {
+    background: #fff !important; 
+    border: 1px solid #cbd5e1 !important; 
+    border-radius: 3px !important; 
+    padding: 4px 10px !important; 
+    font-size: 12px !important; 
+    cursor: pointer !important; 
+    color: #475569 !important;
+    font-family: inherit !important;
+    font-weight: 600 !important;
+    transition: 0.2s ease !important;
+    height: 26px !important;
+}
+.tcc-rte-btn:hover { background: #e2e8f0 !important; color: #0f172a !important; border-color: #94a3b8 !important; }
+.tcc-rte-editor {
+    padding: 10px; 
+    min-height: 80px; 
+    font-size: 13px; 
+    outline: none; 
+    line-height: 1.6;
+    color: #334155;
+}
+.tcc-rte-editor:focus {
+    background: #f8fafc;
+}
+.tcc-rte-editor ul, .tcc-rte-editor ol { padding-left: 25px; margin: 8px 0; }
+.tcc-rte-editor p { margin: 0 0 8px 0; }
+
+/* --- MOBILE OPTIMIZATIONS & DAY ROW REDESIGN --- */
+@media (max-width: 600px) {
+    .tcc-grid-3, .tcc-grid-2 { grid-template-columns: 1fr; gap: 6px; }
+    
+    .tcc-repeater-row { 
+        flex-direction: column; 
+        align-items: stretch; 
+        border: 1px solid #e2e8f0; 
+        padding: 8px; 
+        border-radius: 4px; 
+        background: #f8fafc;
+    }
+    
+    .tcc-wrapper .tcc-repeater-row .tcc-btn-del { 
+        flex: auto !important; 
+        height: 32px !important; 
+        margin-top: 4px !important; 
+    }
+    
+    /* Day Row Mobile Redesign - Exact Mockup Layout */
+    .tcc-day-row {
+        padding: 12px !important;
+    }
+
+    /* Target the first container holding the header & dropdowns */
+    .tcc-day-row > div:first-child {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+        margin-bottom: 10px !important;
+    }
+    
+    /* 1. Drag handle & Label */
+    .tcc-day-row > div:first-child .drag-handle { order: 1; }
+    .tcc-day-row > div:first-child .tcc-day-label { order: 2; }
+    
+    /* 2. Delete button moved to top right */
+    .tcc-day-row > div:first-child .tcc-remove-day { order: 3; margin-left: auto !important; }
+    
+    /* 3. Title Input (Full Width on its own line) */
+    .tcc-day-row > div:first-child .tcc-day-input { 
+        order: 4; 
+        flex: 1 1 100% !important; 
+        margin-top: 4px !important; 
+        margin-bottom: 4px !important;
+    }
+    
+    /* 4. Dropdowns & Controls */
+    .tcc-day-row > div:first-child .tcc-day-stay-place { 
+        order: 5; 
+        flex: 1 1 100% !important; 
+        margin-bottom: 4px !important;
+    }
+    .tcc-day-row > div:first-child .tcc-day-preset-dropdown { order: 6; flex: 1 1 auto !important; }
+    .tcc-day-row > div:first-child .tcc-save-day-preset { order: 7; }
+    .tcc-day-row > div:first-child .tcc-insert-day-btn { order: 8; }
+    
+    /* Second container holding RTE and Image */
+    .tcc-day-row > div:nth-child(2) {
+        flex-direction: column !important;
+        gap: 10px !important;
+    }
+    
+    /* Ensure RTE and Image take full width */
+    .tcc-day-row > div:nth-child(2) > div {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
 }

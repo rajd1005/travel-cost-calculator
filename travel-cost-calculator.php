@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: Travel Cost Calculator
-Description: Complete V3.4 - Smart Auto-Calc, Indian Currency, Persistent Links, Inclusions/Exclusions, Booking Manager, and Lead Follow-up Dashboard.
+Description: Complete V3.4 - Smart Auto-Calc, Indian Currency, Persistent Links, Inclusions/Exclusions, Booking Manager, Lead Follow-up Dashboard, and Detailed Itinerary.
 Version: 3.4
 Author: Your Agency
 */
@@ -11,6 +11,10 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 // Enqueue Styles & Scripts with AJAX
 add_action( 'wp_enqueue_scripts', 'tcc_enqueue_scripts' );
 function tcc_enqueue_scripts() {
+    if ( is_user_logged_in() ) {
+        wp_enqueue_media(); // Load media uploader for itinerary images
+    }
+
     wp_enqueue_style( 'tcc-style', plugin_dir_url( __FILE__ ) . 'assets/css/tcc-style.css', array(), '3.4' );
     wp_enqueue_script( 'tcc-script', plugin_dir_url( __FILE__ ) . 'assets/js/tcc-script.js', array('jquery'), '3.4', true );
     

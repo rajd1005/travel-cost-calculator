@@ -23,9 +23,9 @@ jQuery(document).ready(function($) {
         if (currentStep > 1) { currentStep--; updateStepView(); }
     });
     
-    updateStepView(); // Initialize step view
+    updateStepView();
 
-    // --- NEW: Quantity Button Action Logic ---
+    // --- QTY BTNS ---
     $(document).on('click', '.tcc-qty-btn', function() {
         let $wrapper = $(this).closest('.tcc-qty-wrapper');
         let $input = $wrapper.find('input[type="number"]');
@@ -45,7 +45,6 @@ jQuery(document).ready(function($) {
         $input.trigger('input'); 
     });
 
-
     // STEP 1 MUTUALLY EXCLUSIVE ACCORDIONS
     $('.tcc-step-accordion-header').on('click', function() {
         let $body = $(this).next('.tcc-step-accordion-body');
@@ -55,11 +54,8 @@ jQuery(document).ready(function($) {
             $body.slideUp(150);
             $icon.text('▼'); 
         } else {
-            // Close other step accordions
             $('.tcc-step-accordion-body').slideUp(150);
             $('.tcc-step-accordion-header .tcc-acc-icon').text('▼');
-            
-            // Open clicked
             $body.slideDown(150);
             $icon.text('▲');
         }
@@ -318,7 +314,6 @@ jQuery(document).ready(function($) {
         $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_load_addon_presets', destination: dest }, function(res) {
             if(res.success && res.data) {
                 let pData = res.data;
-                // Double check it clears correctly before injecting
                 $select.html('<option value="">-- Saved Add-ons --</option>');
                 
                 if(Object.keys(pData).length > 0) {
@@ -346,13 +341,10 @@ jQuery(document).ready(function($) {
             let p = presets[presetName];
             addAddonRow(presetName, p.price || 0, p.type || 'flat');
             triggerLiveCalculation();
-            
-            // Reset dropdown
             $('#addon_preset_select').val('').trigger('change');
         }
     });
 
-    // Save individual row to Library
     $(document).on('click', '.save_addon_row', function() {
         let row = $(this).closest('.addon-row');
         let name = row.find('.addon-name').val().trim();
@@ -418,7 +410,6 @@ jQuery(document).ready(function($) {
                     let pData = res.data;
                     if(typeof pData === 'string') { pData = JSON.parse(pData); }
                     
-                    // FIX: Clear the dropdown strictly before rendering to prevent duplicates
                     $select.html('<option value="">-- Load Preset --</option>');
 
                     if(Object.keys(pData).length > 0) {
@@ -562,16 +553,34 @@ jQuery(document).ready(function($) {
     }
 
     let liveCalcTimeout;
-    $('#tcc-calc-form').on('input change', 'input, select', function(e) {
+    $('#tcc-calc-form').on('input change', 'input:not(.tcc-day-desc), select, textarea', function(e) {
         if(e.target.id === 'tcc_calculate_btn' || e.target.id === 'client_name' || e.target.id === 'client_phone' || e.target.id === 'client_email' || e.target.id === 'calc_edit_quote_select' || e.target.id === 'calc_quote_search') return;
         if(e.target.id !== 'total_pax' && e.target.id !== 'child_pax' && e.target.id !== 'child_6_12_pax' && e.target.id !== 'calc_pickup') {
             triggerLiveCalculation();
         }
     });
 
+    // RTE Sync Logic (Debounced to avoid lag)
+    $(document).on('input blur', '.tcc-rte-editor', function() {
+        $(this).siblings('.tcc-day-desc').val($(this).html());
+    });
+
+    $(document).on('click', '.tcc-rte-btn', function(e) {
+        e.preventDefault();
+        let cmd = $(this).data('cmd');
+        document.execCommand(cmd, false, null);
+        $(this).closest('.tcc-rte-container').find('.tcc-rte-editor').focus();
+        $(this).closest('.tcc-rte-container').find('.tcc-rte-editor').trigger('input');
+    });
+
     window.tccLiveSummaryData = null; 
 
     function triggerLiveCalculation() {
+        // Sync all RTEs right before any calculation
+        $('.tcc-rte-editor').each(function() {
+            $(this).siblings('.tcc-day-desc').val($(this).html());
+        });
+
         $('#live_error').hide();
         $('#tcc_link_wrapper').slideUp(); 
         window.tccLiveSummaryData = null; 
@@ -681,6 +690,11 @@ jQuery(document).ready(function($) {
             let vals = $(this).val();
             $(this).siblings('.stay_hotel_hidden').val(vals ? (Array.isArray(vals) ? vals.join(',') : vals) : '');
         });
+        
+        // Final sync of RTEs before generate
+        $('.tcc-rte-editor').each(function() {
+            $(this).siblings('.tcc-day-desc').val($(this).html());
+        });
 
         let btn = $('#tcc_calculate_btn');
         btn.text('Processing...').prop('disabled', true);
@@ -733,6 +747,14 @@ jQuery(document).ready(function($) {
         if(!text) return "None specified.";
         return text.split(/\r\n|\n|\r/).filter(line => line.trim() !== '').map(line => `${bullet} ${line.trim()}`).join('\n');
     }
+    
+    // Safely transforms HTML from the RTE into plain text for WhatsApp
+    function stripHtmlToWA(html) {
+        if(!html) return "";
+        let tmp = document.createElement("DIV");
+        tmp.innerHTML = html.replace(/<li>/gi, "• ").replace(/<br\s*[\/]?>/gi, "\n").replace(/<\/p>/gi, "\n\n").replace(/&nbsp;/g, " ");
+        return tmp.textContent.trim() || tmp.innerText.trim() || "";
+    }
 
     function buildHotelsText(stays) {
         let msg = `*Hotels Selected*\n`;
@@ -769,12 +791,15 @@ jQuery(document).ready(function($) {
 
         let itinerary = [];
         let itinerary_stay_places = [];
+        let itinerary_desc = [];
         $('#day-wise-wrapper .tcc-day-row').each(function() {
             let text = $(this).find('.tcc-day-input').val();
             let stay = $(this).find('.tcc-day-stay-place').val();
+            let desc = $(this).find('.tcc-day-desc').val();
             if(text && text.trim() !== '') {
                 itinerary.push(text.trim());
                 itinerary_stay_places.push(stay || '');
+                itinerary_desc.push(desc || '');
             }
         });
 
@@ -812,6 +837,7 @@ jQuery(document).ready(function($) {
             payment_terms: master.payment_terms || '',
             itinerary: itinerary,
             itinerary_stay_places: itinerary_stay_places,
+            itinerary_desc: itinerary_desc,
             stays: stays
         };
     }
@@ -843,12 +869,16 @@ jQuery(document).ready(function($) {
         
         let msg = `*Itinerary Details*\n`;
         d.itinerary.forEach((day_text, idx) => {
-            let stay = (d.itinerary_stay_places && d.itinerary_stay_places[idx]) ? d.itinerary_stay_places[idx] : '';
-            let stay_suffix = (stay && stay !== 'No Hotel') ? ` n/s-${stay}` : '';
-            msg += `👉Day ${idx + 1}: ${day_text}${stay_suffix}\n`;
+            msg += `👉Day ${idx + 1}: ${day_text}\n`;
+            if (d.itinerary_desc && d.itinerary_desc[idx]) {
+                msg += `${stripHtmlToWA(d.itinerary_desc[idx])}\n`;
+            }
+            if (d.itinerary_stay_places && d.itinerary_stay_places[idx] && d.itinerary_stay_places[idx] !== 'No Hotel') {
+                msg += `Night Stay: ${d.itinerary_stay_places[idx]}\n`;
+            }
+            msg += `\n`;
         });
 
-        msg += `\n`;
         msg += buildHotelsText(d.stays);
 
         msg += `\n*Included in Package*\n`;
@@ -928,9 +958,15 @@ jQuery(document).ready(function($) {
             d.itinerary.forEach(function(day_text, index) {
                 if(day_text.trim() !== '') {
                     msg += `*Day ${index + 1}:* ${day_text}\n`;
+                    if (d.itinerary_desc && d.itinerary_desc[index]) {
+                        msg += `${stripHtmlToWA(d.itinerary_desc[index])}\n`;
+                    }
+                    if (d.itinerary_stay_places && d.itinerary_stay_places[index] && d.itinerary_stay_places[index] !== 'No Hotel') {
+                        msg += `Night Stay: ${d.itinerary_stay_places[index]}\n`;
+                    }
+                    msg += `\n`;
                 }
             });
-            msg += `\n`;
         }
 
         msg += buildHotelsText(d.stays) + `\n`;
@@ -954,6 +990,21 @@ jQuery(document).ready(function($) {
     // --- DAY WISE LOGIC WITH AUTO STAY-SYNC --- //
     
     let tccSortableInstance = null;
+    window.tccTempDayData = null;
+    window.tccGlobalDayPresets = {};
+
+    function loadSingleDayPresets() {
+        let dest = $('#calc_destination').val();
+        if(!dest) return;
+        $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_load_single_day_presets', destination: dest }, function(res) {
+            if(res.success) {
+                window.tccGlobalDayPresets = res.data;
+                let opts = '<option value="">Load Day Preset</option>';
+                $.each(res.data, function(name, d) { opts += `<option value="${name}">${name}</option>`; });
+                $('.tcc-day-preset-dropdown').html(opts);
+            }
+        });
+    }
 
     function initSortable() {
         let el = document.getElementById('day-wise-wrapper');
@@ -1003,17 +1054,196 @@ jQuery(document).ready(function($) {
 
     $(document).on('change', '.tcc-day-stay-place', syncDayWiseToRouting);
 
-    function generateDayInputs() {
-        let days = parseInt($('#total_days').val()) || 0;
-        let wrapper = $('#day-wise-wrapper');
+    // Media uploader logic
+    $(document).on('click', '.tcc-upload-img-btn', function(e) {
+        e.preventDefault();
+        let btn = $(this);
+        let wrapper = btn.closest('div');
+        let hiddenInput = wrapper.find('.tcc-day-image');
+        let imgPreview = wrapper.find('.tcc-day-img-preview');
+        
+        let mediaUploader = wp.media({
+            title: 'Select Day Image',
+            button: { text: 'Use this image' },
+            multiple: false
+        });
+        
+        mediaUploader.on('select', function() {
+            let attachment = mediaUploader.state().get('selection').first().toJSON();
+            hiddenInput.val(attachment.url);
+            imgPreview.attr('src', attachment.url).show();
+            btn.text('Change Image');
+            triggerLiveCalculation();
+        });
+        
+        mediaUploader.open();
+    });
+
+    $(document).on('click', '.tcc-insert-day-btn', function() {
+        let $row = $(this).closest('.tcc-day-row');
+        let index = $row.index();
+        
         let currentValues = [];
         let currentStays = [];
+        let currentDescs = [];
+        let currentImages = [];
         
-        wrapper.find('.tcc-day-row').each(function() { 
+        $('#day-wise-wrapper .tcc-day-row').each(function() { 
             currentValues.push($(this).find('.tcc-day-input').val()); 
             let sp = $(this).find('.tcc-day-stay-place').val();
             currentStays.push(sp !== undefined ? sp : '');
+            currentDescs.push($(this).find('.tcc-day-desc').val());
+            currentImages.push($(this).find('.tcc-day-image').val());
         });
+
+        // Splice a blank day completely safely into arrays directly after this index
+        currentValues.splice(index + 1, 0, '');
+        currentStays.splice(index + 1, 0, '');
+        currentDescs.splice(index + 1, 0, '');
+        currentImages.splice(index + 1, 0, '');
+
+        window.tccTempDayData = { val: currentValues, stay: currentStays, desc: currentDescs, img: currentImages };
+
+        let days = parseInt($('#total_days').val()) || 0;
+        $('#total_days').val(days + 1).trigger('input'); // triggers generateDayInputs
+    });
+
+    // Handle day preset dropdown selection (Does NOT clear dropdown so Delete button works)
+    $(document).on('change', '.tcc-day-preset-dropdown', function() {
+        let presetName = $(this).val();
+        if(!presetName || !window.tccGlobalDayPresets[presetName]) return;
+        let p = window.tccGlobalDayPresets[presetName];
+        let $row = $(this).closest('.tcc-day-row');
+        
+        $row.find('.tcc-day-input').val(p.title || '');
+        $row.find('.tcc-day-desc').val(p.desc || '');
+        $row.find('.tcc-rte-editor').html(p.desc || '');
+        
+        if(p.stay) $row.find('.tcc-day-stay-place').val(p.stay);
+        
+        if(p.image) {
+            $row.find('.tcc-day-image').val(p.image);
+            $row.find('.tcc-day-img-preview').attr('src', p.image).show();
+            $row.find('.tcc-upload-img-btn').text('Change Image');
+        } else {
+            $row.find('.tcc-day-image').val('');
+            $row.find('.tcc-day-img-preview').hide();
+            $row.find('.tcc-upload-img-btn').text('🖼️ Add Image');
+        }
+        triggerLiveCalculation();
+        syncDayWiseToRouting();
+    });
+
+    // Delete Single Day Preset
+    $(document).on('click', '.tcc-delete-day-preset', function() {
+        let $row = $(this).closest('.tcc-day-row');
+        let presetName = $row.find('.tcc-day-preset-dropdown').val();
+        let dest = $('#calc_destination').val();
+
+        if(!presetName) {
+            alert("Please select a Day Preset from the dropdown to delete.");
+            return;
+        }
+        if(!dest) return;
+
+        if(!confirm(`Are you sure you want to permanently delete the Day Preset: "${presetName}"?`)) return;
+
+        let btn = $(this);
+        let oldText = btn.text();
+        btn.text('⏳');
+
+        $.post(tcc_ajax_obj.ajax_url, {
+            action: 'tcc_delete_single_day_preset',
+            destination: dest,
+            preset_name: presetName
+        }, function(res) {
+            btn.text(oldText);
+            if(res.success) {
+                $('#preset_msg').text("Day Preset Deleted!").css('color', '#dc2626').show().delay(2000).fadeOut();
+                $row.find('.tcc-day-preset-dropdown').val('');
+                loadSingleDayPresets();
+            } else {
+                alert(res.data || "Error deleting preset.");
+            }
+        });
+    });
+
+    // Save/Update individual day preset
+    $(document).on('click', '.tcc-save-day-preset', function() {
+        let $row = $(this).closest('.tcc-day-row');
+        let dest = $('#calc_destination').val();
+        let title = $row.find('.tcc-day-input').val().trim();
+        let selectedPreset = $row.find('.tcc-day-preset-dropdown').val();
+        
+        // Sync first before save
+        $row.find('.tcc-day-desc').val($row.find('.tcc-rte-editor').html());
+        let desc = $row.find('.tcc-day-desc').val();
+        
+        let stay = $row.find('.tcc-day-stay-place').val();
+        let img = $row.find('.tcc-day-image').val();
+
+        if(!dest) return alert("Select destination first.");
+        if(!title) return alert("Enter a title for the day first to save it.");
+
+        let defaultName = selectedPreset ? selectedPreset : title;
+        let presetName = prompt("Enter a name for this Individual Day Preset (use an existing name to Update):", defaultName);
+        if(!presetName) return;
+
+        let btn = $(this);
+        let oldText = btn.text();
+        btn.text('⏳');
+
+        $.post(tcc_ajax_obj.ajax_url, {
+            action: 'tcc_save_single_day_preset',
+            destination: dest,
+            preset_name: presetName,
+            title: title,
+            desc: desc,
+            stay: stay,
+            image: img
+        }, function(res) {
+            btn.text(oldText);
+            if(res.success) {
+                $('#preset_msg').text("Day Preset Saved!").css('color', '#16a34a').show().delay(2000).fadeOut();
+                loadSingleDayPresets();
+                setTimeout(function() {
+                    $row.find('.tcc-day-preset-dropdown').val(presetName);
+                }, 500);
+            } else {
+                alert("Error saving preset.");
+            }
+        });
+    });
+
+    function generateDayInputs() {
+        let days = parseInt($('#total_days').val()) || 0;
+        let wrapper = $('#day-wise-wrapper');
+        
+        let currentValues = [];
+        let currentStays = [];
+        let currentDescs = [];
+        let currentImages = [];
+
+        if (window.tccTempDayData) {
+            currentValues = window.tccTempDayData.val;
+            currentStays = window.tccTempDayData.stay;
+            currentDescs = window.tccTempDayData.desc;
+            currentImages = window.tccTempDayData.img;
+            window.tccTempDayData = null; // Reset it immediately
+        } else {
+            wrapper.find('.tcc-day-row').each(function() { 
+                currentValues.push($(this).find('.tcc-day-input').val()); 
+                let sp = $(this).find('.tcc-day-stay-place').val();
+                currentStays.push(sp !== undefined ? sp : '');
+                
+                // Keep RTE synced here to preserve mid-typing progress on re-render
+                let editorHtml = $(this).find('.tcc-rte-editor').html();
+                currentDescs.push(editorHtml !== undefined ? editorHtml : $(this).find('.tcc-day-desc').val());
+                
+                currentImages.push($(this).find('.tcc-day-image').val());
+            });
+        }
+        
         wrapper.empty();
 
         let dest = $('#calc_destination').val();
@@ -1027,24 +1257,68 @@ jQuery(document).ready(function($) {
             }
         }
 
+        let dayPresetOptions = '<option value="">Load Day Preset</option>';
+        if(window.tccGlobalDayPresets) {
+            $.each(window.tccGlobalDayPresets, function(name, d) { dayPresetOptions += `<option value="${name}">${name}</option>`; });
+        }
+
         for(let i = 1; i <= days; i++) {
-            let val = currentValues[i-1] ? currentValues[i-1] : '';
+            let rawVal = currentValues[i-1] ? currentValues[i-1] : '';
+            let val = rawVal.replace(/"/g, '&quot;');
             let spVal = currentStays[i-1] ? currentStays[i-1] : '';
+            let descVal = currentDescs[i-1] ? currentDescs[i-1] : '';
+            let imgVal = currentImages[i-1] ? currentImages[i-1] : '';
 
             let stayDropdownHtml = '';
             if (i < days) {
-                stayDropdownHtml = `<select name="itinerary_stay_place[]" class="tcc-day-stay-place" style="flex:0.6; border-radius:0; margin-bottom:0; font-size:11px; padding:2px; border-left:none;">${stayOptions}</select>`;
+                stayDropdownHtml = `<select name="itinerary_stay_place[]" class="tcc-day-stay-place" style="flex:1; border-radius:3px; margin:0; font-size:11px; padding:4px;">${stayOptions}</select>`;
             } else {
-                stayDropdownHtml = `<input type="hidden" name="itinerary_stay_place[]" value=""><div style="flex:0.6; background:#f1f5f9; border:1px solid #ccc; border-left:none; display:flex; align-items:center; justify-content:center; font-size:10px; color:#94a3b8;">Trip Ends</div>`;
+                stayDropdownHtml = `<input type="hidden" name="itinerary_stay_place[]" value=""><div style="flex:1; background:#f1f5f9; border:1px solid #ccc; border-radius:3px; display:flex; align-items:center; justify-content:center; font-size:10px; color:#94a3b8; margin:0; padding:4px;">Trip Ends</div>`;
             }
 
             let row = `
-            <div class="tcc-day-row" style="display:flex; align-items:stretch; margin-bottom:5px; background:#fff; border-radius:3px;">
-                <div class="drag-handle" style="cursor:grab; padding:8px 10px; background:#f1f5f9; color:#94a3b8; border:1px solid #ccc; border-right:none; border-radius:3px 0 0 3px; display:flex; align-items:center;">&#9776;</div>
-                <div class="tcc-day-label" style="background:#e2e8f0; padding:8px 8px; font-size:11px; font-weight:bold; border:1px solid #ccc; border-right:none; border-left:none; width:55px; text-align:center; display:flex; align-items:center; justify-content:center;">Day ${i}</div>
-                <input type="text" name="itinerary_day[]" class="tcc-day-input" value="${val}" placeholder="E.g. Arrival at Srinagar" style="border-radius:0; margin-bottom:0; flex:1;" required>
-                ${stayDropdownHtml}
-                <button type="button" class="tcc-remove-day tcc-btn-del" style="border-radius:0 3px 3px 0; border-left:none; padding:4px 10px !important;" title="Remove Day">X</button>
+            <div class="tcc-day-row" style="margin-bottom:12px; background:#fff; border-radius:6px; border:1px solid #cbd5e1; padding:12px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+                
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                    <div class="drag-handle" style="cursor:grab; padding:6px 8px; background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1; border-radius:4px; display:flex; align-items:center; height:32px;" title="Drag to Reorder">&#9776;</div>
+                    <div class="tcc-day-label" style="background:#b93b59; color:#fff; padding:0 10px; font-size:12px; font-weight:bold; border-radius:4px; text-align:center; height:32px; line-height:32px;">Day ${i}</div>
+                    <input type="text" name="itinerary_day[]" class="tcc-day-input" value="${val}" placeholder="Day Title (e.g. Arrival at Srinagar)" style="margin:0; flex:1; font-size:14px; font-weight:600; padding:0 10px; height:32px; border-radius:4px;" required>
+                    <button type="button" class="tcc-remove-day tcc-btn-del" style="height:32px; width:32px; padding:0; margin:0; font-size:14px; display:flex; align-items:center; justify-content:center; border-radius:4px;" title="Remove Day">✖</button>
+                </div>
+
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap; background:#f8fafc; padding:8px; border-radius:4px; border:1px dashed #cbd5e1;">
+                    <div style="flex:1; min-width:150px; display:flex; align-items:center; gap:6px;">
+                        <span style="font-size:11px; font-weight:bold; color:#475569; white-space:nowrap;">Night Stay:</span>
+                        ${stayDropdownHtml}
+                    </div>
+                    <div style="flex:2; display:flex; gap:6px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
+                        <select class="tcc-day-preset-dropdown" style="width:140px; font-size:11px; padding:0 6px; margin:0; height:28px; border-radius:3px;">${dayPresetOptions}</select>
+                        <button type="button" class="tcc-save-day-preset tcc-btn-secondary" style="padding:0 10px; margin:0; height:28px; font-size:11px;" title="Save/Update Day Preset">💾 Save</button>
+                        <button type="button" class="tcc-delete-day-preset tcc-btn-del" style="padding:0 10px; margin:0; height:28px; font-size:11px; background:#fee2e2; border-color:#fca5a5;" title="Delete Day Preset">🗑️ Del</button>
+                        <button type="button" class="tcc-insert-day-btn tcc-btn-secondary" style="padding:0 10px; margin:0; height:28px; background:#10b981; border-color:#059669; color:#fff; font-size:11px; margin-left:auto;" title="Insert Blank Day Below">➕ Insert Day</button>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+                    
+                    <div class="tcc-rte-container" style="flex:1; min-width:250px; display:flex; flex-direction:column; border:1px solid #cbd5e1; border-radius:4px; background:#fff; overflow:hidden;">
+                        <div class="tcc-rte-toolbar" style="background:#f1f5f9; padding:6px; border-bottom:1px solid #cbd5e1; display:flex; gap:6px; flex-wrap:wrap;">
+                            <button type="button" class="tcc-rte-btn" data-cmd="bold" style="font-weight:bold;" title="Bold">B</button>
+                            <button type="button" class="tcc-rte-btn" data-cmd="italic" style="font-style:italic;" title="Italic">I</button>
+                            <button type="button" class="tcc-rte-btn" data-cmd="underline" style="text-decoration:underline;" title="Underline">U</button>
+                            <div style="width:1px; background:#cbd5e1; margin:0 4px;"></div>
+                            <button type="button" class="tcc-rte-btn" data-cmd="insertUnorderedList" title="Bullet List">• Bullets</button>
+                        </div>
+                        <div class="tcc-rte-editor" contenteditable="true" style="padding:12px; min-height:100px; font-size:13px; outline:none; line-height:1.6; color:#334155;">${descVal}</div>
+                        <textarea name="itinerary_desc[]" class="tcc-day-desc" style="display:none;">${descVal}</textarea>
+                    </div>
+                    
+                    <div style="width:180px; display:flex; flex-direction:column; gap:8px; background:#f8fafc; padding:8px; border:1px dashed #cbd5e1; border-radius:4px; flex-shrink:0;">
+                        <input type="hidden" name="itinerary_image[]" class="tcc-day-image" value="${imgVal}">
+                        <img src="${imgVal}" class="tcc-day-img-preview" style="width:100%; height:100px; object-fit:cover; display:${imgVal ? 'block' : 'none'}; border-radius:3px; border:1px solid #e2e8f0; background:#fff;">
+                        <button type="button" class="tcc-btn-secondary tcc-upload-img-btn" style="font-size:11px; padding:6px; margin:0; width:100%; font-weight:600;">${imgVal ? 'Change Image' : '🖼️ Add Image'}</button>
+                    </div>
+                </div>
             </div>`;
             
             let $newRow = $(row);
@@ -1053,12 +1327,6 @@ jQuery(document).ready(function($) {
         }
         if (typeof Sortable === 'undefined') { $.getScript('https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js', initSortable); } else { initSortable(); }
     }
-
-    // --- ADD / REMOVE DAY LOGIC ---
-    $('#tcc_add_day_btn').on('click', function() {
-        let days = parseInt($('#total_days').val()) || 0;
-        $('#total_days').val(days + 1).trigger('input');
-    });
 
     $(document).on('click', '.tcc-remove-day', function() {
         $(this).closest('.tcc-day-row').remove();
@@ -1076,6 +1344,7 @@ jQuery(document).ready(function($) {
         updateCalculatorDropdowns(); 
         loadPresets(); 
         loadAddonPresets();
+        loadSingleDayPresets();
         generateDayInputs(); 
         triggerLiveCalculation(); 
     });
@@ -1103,6 +1372,8 @@ jQuery(document).ready(function($) {
             
             let daysArr = [];
             let staysArr = [];
+            let descsArr = [];
+            let imagesArr = [];
 
             if (Array.isArray(presetData)) {
                 daysArr = presetData;
@@ -1114,11 +1385,13 @@ jQuery(document).ready(function($) {
                 }
 
                 if(presetData.stay_places) {
-                    if(Array.isArray(presetData.stay_places)) {
-                        staysArr = presetData.stay_places;
-                    } else if(typeof presetData.stay_places === 'object' && presetData.stay_places !== null) {
-                        staysArr = Object.values(presetData.stay_places);
-                    }
+                    staysArr = Array.isArray(presetData.stay_places) ? presetData.stay_places : Object.values(presetData.stay_places);
+                }
+                if(presetData.itinerary_desc) {
+                    descsArr = Array.isArray(presetData.itinerary_desc) ? presetData.itinerary_desc : Object.values(presetData.itinerary_desc);
+                }
+                if(presetData.itinerary_image) {
+                    imagesArr = Array.isArray(presetData.itinerary_image) ? presetData.itinerary_image : Object.values(presetData.itinerary_image);
                 }
             } else if (presetData && typeof presetData === 'object') {
                 daysArr = Object.values(presetData);
@@ -1128,10 +1401,26 @@ jQuery(document).ready(function($) {
             setTimeout(function() {
                 $('#day-wise-wrapper .tcc-day-row').each(function(index) { 
                     if(daysArr[index]) $(this).find('.tcc-day-input').val(daysArr[index]); 
-                    if(staysArr && staysArr[index]) {
-                        $(this).find('.tcc-day-stay-place').val(staysArr[index]);
+                    
+                    if(staysArr && staysArr[index]) $(this).find('.tcc-day-stay-place').val(staysArr[index]);
+                    else $(this).find('.tcc-day-stay-place').val('');
+
+                    if(descsArr && descsArr[index]) {
+                        $(this).find('.tcc-day-desc').val(descsArr[index]);
+                        $(this).find('.tcc-rte-editor').html(descsArr[index]);
                     } else {
-                        $(this).find('.tcc-day-stay-place').val('');
+                        $(this).find('.tcc-day-desc').val('');
+                        $(this).find('.tcc-rte-editor').html('');
+                    }
+
+                    if(imagesArr && imagesArr[index]) {
+                        $(this).find('.tcc-day-image').val(imagesArr[index]);
+                        $(this).find('.tcc-day-img-preview').attr('src', imagesArr[index]).show();
+                        $(this).find('.tcc-upload-img-btn').text('Change Image');
+                    } else {
+                        $(this).find('.tcc-day-image').val('');
+                        $(this).find('.tcc-day-img-preview').hide();
+                        $(this).find('.tcc-upload-img-btn').text('🖼️ Add Image');
                     }
                 });
                 
@@ -1139,47 +1428,6 @@ jQuery(document).ready(function($) {
             }, 100);
         }
     });
-
-    function loadPresets() {
-        let dest = $('#calc_destination').val();
-        let $select = $('#itinerary_preset_select');
-        
-        $select.html('<option value="">-- Load Preset --</option>');
-        $('#delete_itinerary_preset').hide();
-        
-        if(!dest) return;
-        
-        $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_load_itinerary_presets', destination: dest }, function(res) {
-            try {
-                if(res.success && res.data) {
-                    let pData = res.data;
-                    if(typeof pData === 'string') { pData = JSON.parse(pData); }
-                    
-                    // FIX: Double clear to guarantee no duplicates
-                    $select.html('<option value="">-- Load Preset --</option>');
-
-                    if(Object.keys(pData).length > 0) {
-                        $select.data('presets', pData);
-                        $.each(pData, function(presetName, dataObj) {
-                            let daysLen = 0;
-                            if (Array.isArray(dataObj)) {
-                                daysLen = dataObj.length;
-                            } else if (dataObj && dataObj.itinerary !== undefined) {
-                                if(Array.isArray(dataObj.itinerary)) {
-                                    daysLen = dataObj.itinerary.length;
-                                } else if(typeof dataObj.itinerary === 'object' && dataObj.itinerary !== null) {
-                                    daysLen = Object.keys(dataObj.itinerary).length;
-                                }
-                            } else if (dataObj && typeof dataObj === 'object') {
-                                daysLen = Object.keys(dataObj).length;
-                            }
-                            $select.append(`<option value="${presetName}">${presetName} (${daysLen} Days)</option>`);
-                        });
-                    }
-                }
-            } catch(e) { console.error("Error loading presets: ", e); }
-        });
-    }
 
     $('#new_preset_name').on('input', function() {
         if($(this).val() !== $('#itinerary_preset_select').val()) $('#save_itinerary_preset').text('Save as Preset');
@@ -1190,6 +1438,12 @@ jQuery(document).ready(function($) {
         let presetName = $('#new_preset_name').val();
         let btn = $(this);
         if(!presetName) { alert("Please enter a Preset Name"); return; }
+        
+        // Sync before serializing
+        $('.tcc-rte-editor').each(function() {
+            $(this).siblings('.tcc-day-desc').val($(this).html());
+        });
+
         let formDataArray = $('#tcc-calc-form').serializeArray();
         formDataArray.push({ name: 'action', value: 'tcc_save_itinerary_preset' });
         formDataArray.push({ name: 'preset_name', value: presetName });
@@ -1370,6 +1624,15 @@ jQuery(document).ready(function($) {
                                 if(r.itinerary_stay_place && r.itinerary_stay_place[i]) {
                                     $(this).find('.tcc-day-stay-place').val(r.itinerary_stay_place[i]);
                                 }
+                                if(r.itinerary_desc && r.itinerary_desc[i]) {
+                                    $(this).find('.tcc-day-desc').val(r.itinerary_desc[i]);
+                                    $(this).find('.tcc-rte-editor').html(r.itinerary_desc[i]);
+                                }
+                                if(r.itinerary_image && r.itinerary_image[i]) {
+                                    $(this).find('.tcc-day-image').val(r.itinerary_image[i]);
+                                    $(this).find('.tcc-day-img-preview').attr('src', r.itinerary_image[i]).show();
+                                    $(this).find('.tcc-upload-img-btn').text('Change Image');
+                                }
                             });
                         }, 500);
                     }
@@ -1397,7 +1660,7 @@ jQuery(document).ready(function($) {
     $('#pmt_quote_select').on('change', function() {
         let qid = $(this).val();
         $('#pmt_edit_client_wrapper').hide();
-        $('#pmt_cancel_edit_btn').trigger('click'); // Reset edit state if switching quotes
+        $('#pmt_cancel_edit_btn').trigger('click');
 
         if(!qid) { 
             $('#pmt_dashboard').slideUp(); 
@@ -2013,13 +2276,13 @@ jQuery(document).ready(function($) {
         fetchTransportPricing(); 
         
         loadPresets(); 
-        loadAddonPresets(); // Load custom addons
+        loadAddonPresets();
+        loadSingleDayPresets();
 
         if($('#night-stay-wrapper').children().length === 0) {
             addStayRow();
         }
         
-        // This ensures the first Transport row is generated perfectly on fresh load!
         if($('#transport-wrapper').children().length === 0) {
             addTransportRow();
         }
@@ -2117,7 +2380,6 @@ jQuery(document).ready(function($) {
         let originalText = btn.text();
         btn.text('Restoring Data...').prop('disabled', true);
 
-        // Read file contents via HTML5 FileReader
         let reader = new FileReader();
         reader.onload = function(e) {
             $.ajax({
@@ -2128,7 +2390,7 @@ jQuery(document).ready(function($) {
                 success: function(res) {
                     if(res.success) {
                         alert(res.data);
-                        location.reload(); // Refresh the page to load new settings
+                        location.reload(); 
                     } else {
                         btn.text(originalText).prop('disabled', false);
                         alert("Restore failed: " + (res.data || 'Invalid file format.'));

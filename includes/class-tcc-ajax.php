@@ -23,6 +23,7 @@ add_action( 'wp_ajax_tcc_fetch_transport_rate', 'tcc_fetch_transport_rate' );
 add_action( 'wp_ajax_tcc_optimize_transport', 'tcc_optimize_transport' );
 add_action( 'wp_ajax_nopriv_tcc_optimize_transport', 'tcc_optimize_transport' );
 
+// Full Itinerary Preset Actions
 add_action( 'wp_ajax_tcc_save_itinerary_preset', 'tcc_save_itinerary_preset' );
 add_action( 'wp_ajax_nopriv_tcc_save_itinerary_preset', 'tcc_save_itinerary_preset' ); 
 add_action( 'wp_ajax_tcc_load_itinerary_presets', 'tcc_load_itinerary_presets' );
@@ -58,6 +59,14 @@ add_action( 'wp_ajax_tcc_load_addon_presets', 'tcc_load_addon_presets' );
 add_action( 'wp_ajax_nopriv_tcc_load_addon_presets', 'tcc_load_addon_presets' );
 add_action( 'wp_ajax_tcc_delete_addon_preset', 'tcc_delete_addon_preset' );
 add_action( 'wp_ajax_nopriv_tcc_delete_addon_preset', 'tcc_delete_addon_preset' );
+
+// INDIVIDUAL DAY PRESET ACTIONS
+add_action( 'wp_ajax_tcc_save_single_day_preset', 'tcc_save_single_day_preset' );
+add_action( 'wp_ajax_nopriv_tcc_save_single_day_preset', 'tcc_save_single_day_preset' );
+add_action( 'wp_ajax_tcc_load_single_day_presets', 'tcc_load_single_day_presets' );
+add_action( 'wp_ajax_nopriv_tcc_load_single_day_presets', 'tcc_load_single_day_presets' );
+add_action( 'wp_ajax_tcc_delete_single_day_preset', 'tcc_delete_single_day_preset' );
+add_action( 'wp_ajax_nopriv_tcc_delete_single_day_preset', 'tcc_delete_single_day_preset' );
 
 
 function tcc_optimize_transport() {
@@ -200,7 +209,10 @@ function tcc_calculate_trip() {
     $trans_custom_rates = isset($_POST['transport_custom_rate']) ? $_POST['transport_custom_rate'] : array(); 
     $trans_custom_totals = isset($_POST['transport_custom_total']) ? $_POST['transport_custom_total'] : array();
 
-    $day_itinerary = isset($_POST['itinerary_day']) ? $_POST['itinerary_day'] : array();
+    $day_itinerary = isset($_POST['itinerary_day']) ? wp_unslash($_POST['itinerary_day']) : array();
+    $day_itinerary_desc = isset($_POST['itinerary_desc']) ? wp_unslash($_POST['itinerary_desc']) : array();
+    $day_itinerary_image = isset($_POST['itinerary_image']) ? wp_unslash($_POST['itinerary_image']) : array();
+    $day_itinerary_stays = isset($_POST['itinerary_stay_place']) ? wp_unslash($_POST['itinerary_stay_place']) : array();
 
     $table_hotels = $wpdb->prefix . 'tcc_hotel_rates';
     $table_transport = $wpdb->prefix . 'tcc_transport_rates';
@@ -491,8 +503,10 @@ function tcc_calculate_trip() {
         'transport_row_costs' => $transport_row_costs,
         'hotel_row_costs' => $hotel_row_costs,
         'surcharge_applied' => $surcharge_percent,
-        'itinerary'   => array_map('sanitize_text_field', $day_itinerary),
-        'itinerary_stay_places' => isset($_POST['itinerary_stay_place']) ? array_map('sanitize_text_field', $_POST['itinerary_stay_place']) : array()
+        'itinerary'   => array_map('sanitize_text_field', is_array($day_itinerary) ? $day_itinerary : array()),
+        'itinerary_desc'   => array_map('wp_kses_post', is_array($day_itinerary_desc) ? $day_itinerary_desc : array()),
+        'itinerary_image'   => array_map('sanitize_url', is_array($day_itinerary_image) ? $day_itinerary_image : array()),
+        'itinerary_stay_places' => array_map('sanitize_text_field', is_array($day_itinerary_stays) ? $day_itinerary_stays : array())
     );
 
     $raw_form = array(
@@ -517,7 +531,9 @@ function tcc_calculate_trip() {
         'd2_val' => $d2_val,
         'pickup_custom' => $pickup_custom,
         'drop_custom' => $drop_custom,
-        'itinerary_stay_place' => isset($_POST['itinerary_stay_place']) ? $_POST['itinerary_stay_place'] : array(),
+        'itinerary_desc' => is_array($day_itinerary_desc) ? array_map('wp_kses_post', $day_itinerary_desc) : array(),
+        'itinerary_image' => is_array($day_itinerary_image) ? $day_itinerary_image : array(),
+        'itinerary_stay_place' => is_array($day_itinerary_stays) ? $day_itinerary_stays : array(),
     );
 
     $is_final = isset($_POST['generate_link']) ? 1 : 0;
@@ -824,6 +840,12 @@ function tcc_save_itinerary_preset() {
     $raw_stays = isset($_POST['itinerary_stay_place']) ? $_POST['itinerary_stay_place'] : array();
     $stays = is_array($raw_stays) ? array_map('sanitize_text_field', wp_unslash($raw_stays)) : array();
 
+    $raw_desc = isset($_POST['itinerary_desc']) ? $_POST['itinerary_desc'] : array();
+    $desc = is_array($raw_desc) ? array_map('wp_kses_post', wp_unslash($raw_desc)) : array();
+
+    $raw_image = isset($_POST['itinerary_image']) ? $_POST['itinerary_image'] : array();
+    $image = is_array($raw_image) ? array_map('sanitize_url', wp_unslash($raw_image)) : array();
+
     if(empty($preset_name) || empty($days)) { wp_send_json_error("Missing data"); wp_die(); }
 
     $presets = get_option('tcc_itinerary_presets', array());
@@ -831,6 +853,8 @@ function tcc_save_itinerary_preset() {
     
     $presets[$destination][$preset_name] = array(
         'itinerary' => $days,
+        'itinerary_desc' => $desc,
+        'itinerary_image' => $image,
         'stay_places' => $stays
     );
     update_option('tcc_itinerary_presets', $presets);
@@ -1054,10 +1078,11 @@ function tcc_export_backup() {
     $backup = array();
 
     $backup['options'] = array(
-        'tcc_global_settings'   => get_option('tcc_global_settings'),
-        'tcc_master_settings'   => get_option('tcc_master_settings'),
-        'tcc_itinerary_presets' => get_option('tcc_itinerary_presets'),
-        'tcc_addon_presets'     => get_option('tcc_addon_presets'),
+        'tcc_global_settings'    => get_option('tcc_global_settings'),
+        'tcc_master_settings'    => get_option('tcc_master_settings'),
+        'tcc_itinerary_presets'  => get_option('tcc_itinerary_presets'),
+        'tcc_addon_presets'      => get_option('tcc_addon_presets'),
+        'tcc_single_day_presets' => get_option('tcc_single_day_presets'),
     );
 
     $table_hotels = $wpdb->prefix . 'tcc_hotel_rates';
@@ -1104,6 +1129,7 @@ function tcc_import_backup() {
     if(isset($data['options']['tcc_master_settings'])) update_option('tcc_master_settings', $data['options']['tcc_master_settings']);
     if(isset($data['options']['tcc_itinerary_presets'])) update_option('tcc_itinerary_presets', $data['options']['tcc_itinerary_presets']);
     if(isset($data['options']['tcc_addon_presets'])) update_option('tcc_addon_presets', $data['options']['tcc_addon_presets']);
+    if(isset($data['options']['tcc_single_day_presets'])) update_option('tcc_single_day_presets', $data['options']['tcc_single_day_presets']);
 
     $table_hotels = $wpdb->prefix . 'tcc_hotel_rates';
     $table_trans  = $wpdb->prefix . 'tcc_transport_rates';
@@ -1279,6 +1305,70 @@ function tcc_delete_addon_preset() {
         unset($presets[$destination][$preset_name]);
         update_option('tcc_addon_presets', $presets);
         wp_send_json_success("Deleted Successfully");
+    } else {
+        wp_send_json_error("Preset not found");
+    }
+}
+
+// --- INDIVIDUAL DAY PRESET ENDPOINTS ---
+
+function tcc_save_single_day_preset() {
+    if ( ! is_user_logged_in() ) wp_die();
+    
+    $dest = trim(sanitize_text_field($_POST['destination']));
+    $preset_name = trim(sanitize_text_field($_POST['preset_name']));
+    
+    $title = trim(sanitize_text_field($_POST['title']));
+    
+    // IMPORTANT: Allow rich text HTML tags for the Day Descriptions
+    $desc = wp_kses_post(wp_unslash($_POST['desc']));
+    
+    $stay = trim(sanitize_text_field($_POST['stay']));
+    $image = trim(sanitize_url($_POST['image']));
+
+    if(empty($dest) || empty($preset_name) || empty($title)) { wp_send_json_error("Missing data"); wp_die(); }
+
+    $presets = get_option('tcc_single_day_presets', array());
+    if(!isset($presets[$dest])) $presets[$dest] = array();
+    
+    $presets[$dest][$preset_name] = array(
+        'title' => $title,
+        'desc'  => $desc,
+        'stay'  => $stay,
+        'image' => $image
+    );
+    update_option('tcc_single_day_presets', $presets);
+    
+    wp_send_json_success("Day Preset Saved Successfully");
+}
+
+function tcc_load_single_day_presets() {
+    if ( ! is_user_logged_in() ) wp_die();
+    
+    $dest = trim(sanitize_text_field($_POST['destination']));
+    $presets = get_option('tcc_single_day_presets', array());
+    
+    if(isset($presets[$dest])) {
+        wp_send_json_success($presets[$dest]);
+    } else {
+        wp_send_json_success(array());
+    }
+}
+
+function tcc_delete_single_day_preset() {
+    if ( ! is_user_logged_in() ) wp_die();
+    
+    $dest = trim(sanitize_text_field($_POST['destination']));
+    $preset_name = trim(sanitize_text_field($_POST['preset_name']));
+    
+    if(empty($dest) || empty($preset_name)) { wp_send_json_error("Missing data"); wp_die(); }
+
+    $presets = get_option('tcc_single_day_presets', array());
+    
+    if(isset($presets[$dest]) && isset($presets[$dest][$preset_name])) {
+        unset($presets[$dest][$preset_name]);
+        update_option('tcc_single_day_presets', $presets);
+        wp_send_json_success("Day Preset Deleted Successfully");
     } else {
         wp_send_json_error("Preset not found");
     }

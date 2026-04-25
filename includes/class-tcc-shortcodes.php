@@ -37,9 +37,15 @@ function tcc_render_calculator_form() {
         return '<div style="padding:40px; text-align:center; color:#dc2626; font-family:sans-serif; background:#fee2e2; border:1px solid #f87171; border-radius:6px; margin:20px 0;"><strong>Access Denied:</strong> Please log in to access the Travel Calculator.</div>';
     }
 
+    // Ensures the WordPress media uploader is loaded for the day-wise images
+    wp_enqueue_media();
+
     $master_data = tcc_get_safe_master_data();
     $global_settings = tcc_get_global_settings();
     $destinations = array_keys($master_data);
+    
+    // Default 15 days from today
+    $default_start_date = date('Y-m-d', strtotime('+15 days'));
 
     ob_start(); ?>
     <div class="tcc-wrapper">
@@ -94,7 +100,7 @@ function tcc_render_calculator_form() {
                             </div>
                             <div class="tcc-form-group">
                                 <label>Start Date <small style="color:#64748b;">(Optional)</small></label>
-                                <input type="date" name="start_date" id="start_date">
+                                <input type="date" name="start_date" id="start_date" value="<?php echo $default_start_date; ?>">
                             </div>
                         </div>
                         <div class="tcc-grid-3">
@@ -123,6 +129,38 @@ function tcc_render_calculator_form() {
                                 </div>
                             </div>
                         </div>
+
+                        <div class="tcc-grid-3" style="border-top: 1px dashed #e2e8f0; padding-top: 15px;">
+                            <div class="tcc-form-group">
+                                <label>Total Days</label>
+                                <div class="tcc-qty-wrapper">
+                                    <button type="button" class="tcc-qty-btn minus">-</button>
+                                    <input type="number" name="total_days" id="total_days" value="4" min="1" required>
+                                    <button type="button" class="tcc-qty-btn plus">+</button>
+                                </div>
+                                <small style="font-size:10px; color:#64748b;">Nights: <span id="total_nights_display">3</span></small>
+                            </div>
+                            <div class="tcc-form-group">
+                                <label>Rooms</label>
+                                <div class="tcc-qty-wrapper">
+                                    <button type="button" class="tcc-qty-btn minus">-</button>
+                                    <input type="number" name="no_of_rooms" id="no_of_rooms" value="1" min="1" required>
+                                    <button type="button" class="tcc-qty-btn plus">+</button>
+                                </div>
+                            </div>
+                            <div class="tcc-form-group">
+                                <label>Extra Beds</label>
+                                <div class="tcc-qty-wrapper">
+                                    <button type="button" class="tcc-qty-btn minus">-</button>
+                                    <input type="number" name="extra_beds" id="extra_beds" value="0" min="0" required>
+                                    <button type="button" class="tcc-qty-btn plus">+</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tcc-form-group">
+                            <label>Overall Hotel Category <small style="color:#64748b;">(Changes all locations below)</small></label>
+                            <select name="hotel_category" id="calc_hotel_cat" required></select>
+                        </div>
                     </div>
                 </div>
 
@@ -138,33 +176,12 @@ function tcc_render_calculator_form() {
                     </div>
                     
                     <div id="day-wise-wrapper" style="margin-bottom: 10px;"></div>
-                    
-                    <button type="button" id="tcc_add_day_btn" class="tcc-btn-secondary" style="margin-bottom:10px;">+ Add Day</button>
 
                     <div style="display:flex; gap:5px; background: #f9f9f9; padding: 8px; border: 1px dashed #ccc; border-radius: 3px;">
                         <input type="text" id="new_preset_name" placeholder="Preset Name (e.g. Kashmir 5D/4N)" style="flex:2; margin:0;">
                         <button type="button" id="save_itinerary_preset" class="tcc-btn-secondary" style="flex:1; margin:0;">Save as Preset</button>
                     </div>
                     <div id="preset_msg" style="font-size:11px; color:#16a34a; margin-top:5px; display:none; font-weight:bold;">Saved!</div>
-                </div>
-
-                <div class="tcc-card">
-                    <div class="tcc-card-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <span>Trip Add-ons <small style="font-size:11px; font-weight:normal; color:#64748b;">(Cost added to total)</small></span>
-                        <div style="display:flex; gap:5px;">
-                            <select id="addon_preset_select" style="font-size:11px; padding:2px; font-weight:normal; max-width: 140px;">
-                                <option value="">-- Saved Add-ons --</option>
-                            </select>
-                            <button type="button" id="insert_addon_preset" class="tcc-btn-secondary" style="display:none; padding:2px 6px; font-size:11px;" title="Add to Trip">+ Add</button>
-                            <button type="button" id="delete_addon_preset" class="tcc-btn-del" style="display:none; padding:2px 6px; font-size:11px;" title="Delete from Library">🗑️</button>
-                        </div>
-                    </div>
-                    
-                    <div class="tcc-form-group" style="margin-bottom:0;">
-                        <div id="addons-wrapper"></div>
-                        <button type="button" id="add_addon_btn" class="tcc-btn-secondary" style="margin-top:5px; font-size:11px; padding:4px 8px;">+ Custom Add-on</button>
-                        <div id="addon_preset_msg" style="font-size:10px; color:#16a34a; margin-top:3px; display:none; font-weight:bold;"></div>
-                    </div>
                 </div>
 
                 <div style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:15px;">
@@ -211,46 +228,30 @@ function tcc_render_calculator_form() {
             </div>
 
             <div id="tcc-step-2" class="tcc-step">
-                
-                <div class="tcc-card">
-                    <div class="tcc-card-title">4. Stay Duration & Rooms</div>
-                    <div class="tcc-grid-3">
-                        <div class="tcc-form-group">
-                            <label>Total Days</label>
-                            <div class="tcc-qty-wrapper">
-                                <button type="button" class="tcc-qty-btn minus">-</button>
-                                <input type="number" name="total_days" id="total_days" value="4" min="1" required>
-                                <button type="button" class="tcc-qty-btn plus">+</button>
-                            </div>
-                            <small style="font-size:10px; color:#64748b;">Nights: <span id="total_nights_display">3</span></small>
-                        </div>
-                        <div class="tcc-form-group">
-                            <label>Rooms</label>
-                            <div class="tcc-qty-wrapper">
-                                <button type="button" class="tcc-qty-btn minus">-</button>
-                                <input type="number" name="no_of_rooms" id="no_of_rooms" value="1" min="1" required>
-                                <button type="button" class="tcc-qty-btn plus">+</button>
-                            </div>
-                        </div>
-                        <div class="tcc-form-group">
-                            <label>Extra Beds</label>
-                            <div class="tcc-qty-wrapper">
-                                <button type="button" class="tcc-qty-btn minus">-</button>
-                                <input type="number" name="extra_beds" id="extra_beds" value="0" min="0" required>
-                                <button type="button" class="tcc-qty-btn plus">+</button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="tcc-form-group">
-                        <label>Overall Hotel Category <small style="color:#64748b;">(Changes all locations below)</small></label>
-                        <select name="hotel_category" id="calc_hotel_cat" required></select>
-                    </div>
-                </div>
 
                 <div class="tcc-card">
-                    <div class="tcc-card-title">5. Itinerary Routing (Hotels)</div>
+                    <div class="tcc-card-title">4. Itinerary Routing (Hotels)</div>
                     <div id="night-stay-wrapper"></div>
                     <button type="button" id="add_stay_place" class="tcc-btn-secondary" style="margin-top:5px;">+ Add Location</button>
+                </div>
+                
+                <div class="tcc-card">
+                    <div class="tcc-card-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <span>5. Trip Add-ons <small style="font-size:11px; font-weight:normal; color:#64748b;">(Cost added to total)</small></span>
+                        <div style="display:flex; gap:5px;">
+                            <select id="addon_preset_select" style="font-size:11px; padding:2px; font-weight:normal; max-width: 140px;">
+                                <option value="">-- Saved Add-ons --</option>
+                            </select>
+                            <button type="button" id="insert_addon_preset" class="tcc-btn-secondary" style="display:none; padding:2px 6px; font-size:11px;" title="Add to Trip">+ Add</button>
+                            <button type="button" id="delete_addon_preset" class="tcc-btn-del" style="display:none; padding:2px 6px; font-size:11px;" title="Delete from Library">🗑️</button>
+                        </div>
+                    </div>
+                    
+                    <div class="tcc-form-group" style="margin-bottom:0;">
+                        <div id="addons-wrapper"></div>
+                        <button type="button" id="add_addon_btn" class="tcc-btn-secondary" style="margin-top:5px; font-size:11px; padding:4px 8px;">+ Custom Add-on</button>
+                        <div id="addon_preset_msg" style="font-size:10px; color:#16a34a; margin-top:3px; display:none; font-weight:bold;"></div>
+                    </div>
                 </div>
 
             </div>
