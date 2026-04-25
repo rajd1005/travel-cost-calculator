@@ -10,8 +10,8 @@ function tcc_enqueue_expense_scripts() {
         wp_enqueue_style( 'flatpickr-css', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css', array(), '4.6.13' );
         wp_enqueue_script( 'flatpickr-js', 'https://cdn.jsdelivr.net/npm/flatpickr', array(), '4.6.13', true );
         
-        // Version bumped to 2.9 to clear cache
-        wp_enqueue_script( 'tcc-expenses-js', plugin_dir_url( dirname(__FILE__) ) . 'assets/js/tcc-expenses.js', array('jquery', 'flatpickr-js'), '2.9', true );
+        // Version bumped to 3.0 to clear cache
+        wp_enqueue_script( 'tcc-expenses-js', plugin_dir_url( dirname(__FILE__) ) . 'assets/js/tcc-expenses.js', array('jquery', 'flatpickr-js'), '3.0', true );
         wp_localize_script( 'tcc-expenses-js', 'tcc_exp_obj', array(
             'ajax_url' => admin_url( 'admin-ajax.php' )
         ));
@@ -104,6 +104,10 @@ function tcc_render_expense_calculator() {
                 <div>Total PG: <strong id="m_pg" style="color:#dc2626;">₹0.00</strong></div>
                 <div>Total GST: <strong id="m_gst" style="color:#dc2626;">₹0.00</strong></div>
             </div>
+            
+            <div style="text-align:center; font-size:10px; color:#b91c1c; margin-top:8px; font-weight:bold; background:#fef2f2; padding:4px; border-radius:3px;">
+                ℹ️ Note: Booking-specific Expenses, PT, GST, and Net Profit are ONLY counted here once a customer's balance is ₹0.00.
+            </div>
         </div>
 
         <div class="tcc-exp-tabs">
@@ -116,6 +120,7 @@ function tcc_render_expense_calculator() {
             <div class="tcc-card" style="border-left: 4px solid #f59e0b;">
                 <div class="tcc-card-title">Add Everyday Expense (Ads, Rent, Salaries, etc.)</div>
                 <form id="frm_general_expense" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
+                    <input type="hidden" id="ge_id" value="">
                     <input type="date" id="ge_date" required style="flex:1; min-width:110px;">
                     <select id="ge_cat" required style="flex:1.5; min-width:130px;">
                         <option value="">-- Category --</option>
@@ -128,6 +133,7 @@ function tcc_render_expense_calculator() {
                     <input type="text" id="ge_desc" placeholder="Details" style="flex:2; min-width:150px;">
                     <input type="number" id="ge_amt" step="0.01" min="1" placeholder="Amount (₹)" required style="flex:1; min-width:100px;">
                     <button type="submit" class="tcc-btn-primary" style="margin:0; flex:1; min-width:80px;">Add</button>
+                    <button type="button" id="ge_cancel_edit" class="tcc-btn-secondary" style="display:none; margin:0; flex:0.5; min-width:60px;">Cancel</button>
                 </form>
                 
                 <h4 style="margin: 15px 0 8px; font-size:13px;">Expense History <span style="font-weight:normal; font-size:11px; color:#64748b;">(Auto-added daily expenses appear here for you to edit/delete)</span></h4>
@@ -240,7 +246,7 @@ function tcc_render_expense_calculator() {
                     <div style="font-size:12px; color:#64748b; font-weight:bold;">EXPECTED NET PROFIT</div>
                     <div style="font-size:10px; color:#94a3b8; margin-bottom:5px;">(Sold Value - Expected Costs)</div>
                     <div id="bk_expected_profit" style="font-size:22px; font-weight:900;">₹0.00</div>
-                    <div id="bk_unconfirmed_warning" style="display:none; font-size:11px; color:#dc2626; margin-top:8px; font-weight:bold;">⚠️ Profit Excluded from Master Dashboard (Customer Paid ≤ Base Cost)</div>
+                    <div id="bk_unconfirmed_warning" style="display:none; font-size:11px; color:#dc2626; margin-top:8px; font-weight:bold;">⚠️ Profit Excluded from Master Dashboard (Customer Payment Pending)</div>
                 </div>
 
             </div>

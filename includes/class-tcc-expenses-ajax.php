@@ -17,8 +17,12 @@ function tcc_load_master_finances_ajax() {
     
     if ($last_run !== $today) {
         $recurring = get_option('tcc_auto_daily_expenses', array());
+        if (!is_array($recurring)) $recurring = array(); // FIX: Ensure array
+
         if (!empty($recurring)) {
             $general = get_option('tcc_general_expenses', array());
+            if (!is_array($general)) $general = array(); // FIX: Ensure array
+
             $start_ts = empty($last_run) ? strtotime($today) : strtotime($last_run . ' +1 day');
             $today_ts = strtotime($today);
             
@@ -49,15 +53,28 @@ function tcc_load_master_finances_ajax() {
     $bookings_data = array();
 
     foreach($quotes as $q) {
+        // Move booking_date up so it can be used as a baseline for payments
+        $booking_date = date('Y-m-d', strtotime($q->post_date));
+        
         $payments = get_post_meta($q->ID, 'tcc_payments', true);
         $booking_income = 0;
         $actual_pg_paid = 0; // Tracks Actual PG Fee Deducted from the Bank
+        $last_payment_date = $booking_date; 
+        $valid_payments = array();
         
         if (is_array($payments)) {
             foreach($payments as $p) {
                 if (isset($p['method']) && $p['method'] !== 'Refund') {
                     $booking_income += floatval($p['amount']);
                     $actual_pg_paid += isset($p['pg_fee']) ? floatval($p['pg_fee']) : 0;
+                    
+                    if (!empty($p['date'])) {
+                        $p_date = date('Y-m-d', strtotime($p['date']));
+                        if ($p_date > $last_payment_date) {
+                            $last_payment_date = $p_date; // Track the date of the final payment
+                        }
+                    }
+                    $valid_payments[] = $p; // Save history for Cash-Basis tracking
                 }
             }
         }
@@ -70,8 +87,6 @@ function tcc_load_master_finances_ajax() {
 
         $data = json_decode($q->post_content, true);
         $sum = isset($data['summary']) ? $data['summary'] : array();
-
-        $booking_date = date('Y-m-d', strtotime($q->post_date));
 
         // Get Traveler data
         $pax = isset($sum['pax']) ? intval($sum['pax']) : 0;
@@ -134,6 +149,8 @@ function tcc_load_master_finances_ajax() {
             'destination' => $dest,
             'pax' => $total_travellers,
             'booking_date' => $booking_date,
+            'final_payment_date' => $last_payment_date, // Added final payment date tracking
+            'payment_history' => $valid_payments,       // Added full payment history
             'income' => $booking_income,
             'pkg_value' => $grand_total,
             'auto_cost' => $base_cost_no_addons, // Filtered Cost without addons
@@ -149,9 +166,11 @@ function tcc_load_master_finances_ajax() {
     }
 
     $general_expenses = get_option('tcc_general_expenses', array());
+    if(!is_array($general_expenses)) $general_expenses = array(); // FIX Ensure array
     usort($general_expenses, function($a, $b) { return strtotime($b['date']) - strtotime($a['date']); });
 
     $auto_expenses = get_option('tcc_auto_daily_expenses', array());
+    if(!is_array($auto_expenses)) $auto_expenses = array(); // FIX Ensure array
 
     wp_send_json_success(array(
         'bookings' => $bookings_data,
@@ -213,13 +232,34 @@ function tcc_save_booking_expense_ajax() {
 
 function tcc_save_general_expense_ajax() {
     if ( ! is_user_logged_in() ) wp_die();
+    
+    $id = isset($_POST['id']) ? sanitize_text_field($_POST['id']) : '';
     $date = sanitize_text_field($_POST['date']);
     $cat = sanitize_text_field($_POST['cat']);
     $desc = sanitize_text_field($_POST['desc']);
     $amount = floatval($_POST['amount']);
+    
     if(empty($date) || empty($cat) || $amount <= 0) wp_send_json_error("Invalid input");
+    
     $general = get_option('tcc_general_expenses', array());
-    $general[] = array('id' => uniqid('ge_'), 'date' => $date, 'category' => $cat, 'desc' => $desc, 'amount' => $amount);
+    if(!is_array($general)) $general = array(); // FIX Ensure array
+    
+    if (!empty($id)) {
+        // UPDATE Existing Expense
+        foreach ($general as &$ge) {
+            if ($ge['id'] === $id) {
+                $ge['date'] = $date;
+                $ge['category'] = $cat;
+                $ge['desc'] = $desc;
+                $ge['amount'] = $amount;
+                break;
+            }
+        }
+    } else {
+        // INSERT New Expense
+        $general[] = array('id' => uniqid('ge_'), 'date' => $date, 'category' => $cat, 'desc' => $desc, 'amount' => $amount);
+    }
+    
     update_option('tcc_general_expenses', $general);
     wp_send_json_success();
 }
@@ -228,6 +268,7 @@ function tcc_delete_general_expense_ajax() {
     if ( ! is_user_logged_in() ) wp_die();
     $id = sanitize_text_field($_POST['id']);
     $general = get_option('tcc_general_expenses', array());
+    if(!is_array($general)) $general = array(); // FIX Ensure array
     $new_general = array();
     foreach($general as $ge) { if($ge['id'] !== $id) $new_general[] = $ge; }
     update_option('tcc_general_expenses', $new_general);
@@ -242,6 +283,7 @@ function tcc_save_auto_expense_ajax() {
     if(empty($cat) || $amount <= 0) wp_send_json_error("Invalid input");
     
     $autos = get_option('tcc_auto_daily_expenses', array());
+    if(!is_array($autos)) $autos = array(); // FIX Ensure array
     $autos[] = array('id' => uniqid('ae_'), 'category' => $cat, 'desc' => $desc, 'amount' => $amount);
     update_option('tcc_auto_daily_expenses', $autos);
     wp_send_json_success();
@@ -251,6 +293,7 @@ function tcc_delete_auto_expense_ajax() {
     if ( ! is_user_logged_in() ) wp_die();
     $id = sanitize_text_field($_POST['id']);
     $autos = get_option('tcc_auto_daily_expenses', array());
+    if(!is_array($autos)) $autos = array(); // FIX Ensure array
     $new_autos = array();
     foreach($autos as $a) { if($a['id'] !== $id) $new_autos[] = $a; }
     update_option('tcc_auto_daily_expenses', $new_autos);

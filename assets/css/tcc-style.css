@@ -1,7 +1,7 @@
 /* Global Wrapper */
 .tcc-wrapper {
     font-family: inherit;
-    max-width: 800px;
+    max-width: 100%;
     margin: 0 auto;
     color: #333;
     font-size: 13px;

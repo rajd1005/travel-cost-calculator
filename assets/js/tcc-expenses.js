@@ -110,15 +110,19 @@ jQuery(document).ready(function($) {
         } else {
             generalHtml += `<table style="width:100%; border-collapse:collapse; text-align:left;">
                         <tr style="background:#f1f5f9; border-bottom:1px solid #cbd5e1;">
-                            <th style="padding:8px;">Date</th><th style="padding:8px;">Category</th><th style="padding:8px;">Details</th><th style="padding:8px;">Amount</th><th style="padding:8px;">Action</th>
+                            <th style="padding:8px;">Date</th><th style="padding:8px;">Category</th><th style="padding:8px;">Details</th><th style="padding:8px;">Amount</th><th style="padding:8px; text-align:right;">Action</th>
                         </tr>`;
             filteredGeneral.forEach(e => {
+                let safeDesc = e.desc ? e.desc.replace(/"/g, '&quot;') : '';
                 generalHtml += `<tr style="border-bottom:1px solid #f1f5f9;">
                             <td style="padding:8px;">${e.date}</td>
                             <td style="padding:8px;">${e.category}</td>
                             <td style="padding:8px; color:#64748b;">${e.desc}</td>
                             <td style="padding:8px; font-weight:bold; color:#dc2626;">-${expFormatINR(e.amount)}</td>
-                            <td style="padding:8px;"><button type="button" class="del-ge-btn" data-id="${e.id}" style="background:none; border:none; color:#dc2626; cursor:pointer; text-decoration:underline;">Delete</button></td>
+                            <td style="padding:8px; text-align:right;">
+                                <button type="button" class="edit-ge-btn" data-id="${e.id}" data-date="${e.date}" data-cat="${e.category}" data-desc="${safeDesc}" data-amount="${e.amount}" style="background:none; border:none; color:#0369a1; cursor:pointer; text-decoration:underline; margin-right:8px; font-size:12px;">Edit</button>
+                                <button type="button" class="del-ge-btn" data-id="${e.id}" style="background:none; border:none; color:#dc2626; cursor:pointer; text-decoration:underline; font-size:12px;">Delete</button>
+                            </td>
                          </tr>`;
             });
             generalHtml += `</table>`;
@@ -126,20 +130,18 @@ jQuery(document).ready(function($) {
         $('#ge_history_table').html(generalHtml);
 
         $.each(masterData.bookings, function(id, b) {
-            let inCurrent = true;
-            let inPrev = false;
+            let inCurrentBooking = true;
+            let inPrevBooking = false;
 
             if (hasFilter) {
-                inCurrent = (b.booking_date >= start && b.booking_date <= end);
-                inPrev = (hasCompare && b.booking_date >= prevStart && b.booking_date <= prevEnd);
+                inCurrentBooking = (b.booking_date >= start && b.booking_date <= end);
+                inPrevBooking = (hasCompare && b.booking_date >= prevStart && b.booking_date <= prevEnd);
             }
             
-            let manualBase = 0, manualProfit = 0;
+            let manualBase = 0, manualProfit = 0, manualPkg = 0;
             
             if(b.quote_addons && b.quote_addons.length > 0) {
-                b.quote_addons.forEach(addon => {
-                    manualBase += parseFloat(addon.amount) || 0;
-                });
+                b.quote_addons.forEach(addon => { manualBase += parseFloat(addon.amount) || 0; });
             }
 
             if(b.manual_expenses && b.manual_expenses.length > 0) {
@@ -148,51 +150,76 @@ jQuery(document).ready(function($) {
                     let type = me.type || 'base_cost';
                     if(type === 'base_cost') manualBase += amt;
                     else if(type === 'net_profit') manualProfit += amt;
+                    else if(type === 'pkg_value') manualPkg += amt;
                 });
             }
 
             let b_income = parseFloat(b.income) || 0;
+
+            // 1. PURE CASH BASIS INCOME CALCULATION (Splits income exactly when paid)
+            if (b.payment_history && b.payment_history.length > 0) {
+                b.payment_history.forEach(pay => {
+                    let pAmt = parseFloat(pay.amount) || 0;
+                    let pDate = pay.date ? pay.date.split('T')[0] : b.booking_date; 
+                    
+                    if (hasFilter) {
+                        if (pDate >= start && pDate <= end) t_income += pAmt;
+                        else if (hasCompare && pDate >= prevStart && pDate <= prevEnd) p_income += pAmt;
+                    } else {
+                        t_income += pAmt;
+                    }
+                });
+            } else {
+                // Fallback for old bookings without history
+                if (inCurrentBooking) t_income += b_income;
+                if (inPrevBooking) p_income += b_income;
+            }
+
             let base_cost_raw = parseFloat(b.auto_cost) || 0;
-            
             let b_base_cost = base_cost_raw + manualBase;
             let b_vendor_paid = parseFloat(b.vendor_paid) || 0;
-
             let b_actual_pg = parseFloat(b.actual_pg) || 0;
-
-            // FIX: Actual paid expense uses Actual PG and DOES NOT include manualBase (prevents double counting cash outflow)
-            let b_actual_paid_expense = b_vendor_paid + parseFloat(b.auto_pt) + b_actual_pg + parseFloat(b.auto_gst);
             
-            // Expected expense uses Quoted PG and DOES include manualBase
+            let b_actual_paid_expense = b_vendor_paid + parseFloat(b.auto_pt) + b_actual_pg + parseFloat(b.auto_gst);
             let b_expected_total_expense = b_base_cost + parseFloat(b.auto_pt) + parseFloat(b.auto_pg) + parseFloat(b.auto_gst);
             let b_pax = parseInt(b.pax) || 0;
 
-            if (inCurrent) {
-                t_income += b_income;
-                t_expense_paid += b_actual_paid_expense;
-                
-                t_pt += parseFloat(b.auto_pt) || 0;
-                t_pg += b_actual_pg; // Dashboard tracks Actual PG Deducted
-                t_gst += parseFloat(b.auto_gst) || 0;
+            let b_pkg_value = (parseFloat(b.pkg_value) || 0) + manualPkg;
+            let is_fully_paid = b_income >= (b_pkg_value - 1); 
 
+            // 2. BOOKING METRICS (Stays on the month the sale was made)
+            if (inCurrentBooking) {
                 t_bookings++;
                 t_travellers += b_pax;
-
                 let dName = b.destination || 'Unknown';
                 if(!dest_counts[dName]) dest_counts[dName] = 0;
                 dest_counts[dName]++;
-
-                if (b_income > base_cost_raw) {
-                    t_net_profit += (b_income + manualProfit - b_expected_total_expense);
-                }
             }
-
-            if (inPrev) {
-                p_income += b_income;
-                p_expense_paid += b_actual_paid_expense;
+            if (inPrevBooking) {
                 p_bookings++;
                 p_travellers += b_pax;
+            }
 
-                if (b_income > base_cost_raw) {
+            // 3. REALIZED PROFIT & TAXES (Shifts to the month of the Final Payment)
+            if (is_fully_paid) {
+                let fpDate = b.final_payment_date || b.booking_date;
+                let inCurrentFP = true;
+                let inPrevFP = false;
+                
+                if (hasFilter) {
+                    inCurrentFP = (fpDate >= start && fpDate <= end);
+                    inPrevFP = (hasCompare && fpDate >= prevStart && fpDate <= prevEnd);
+                }
+
+                if (inCurrentFP) {
+                    t_expense_paid += b_actual_paid_expense;
+                    t_pt += parseFloat(b.auto_pt) || 0;
+                    t_pg += b_actual_pg; 
+                    t_gst += parseFloat(b.auto_gst) || 0;
+                    t_net_profit += (b_income + manualProfit - b_expected_total_expense);
+                }
+                if (inPrevFP) {
+                    p_expense_paid += b_actual_paid_expense;
                     p_net_profit += (b_income + manualProfit - b_expected_total_expense);
                 }
             }
@@ -253,22 +280,55 @@ jQuery(document).ready(function($) {
         $('#m_travellers_compare').html(getTrendHtml(t_travellers, p_travellers));
     }
 
+    // --- EVERYDAY EXPENSE LOGIC ---
     $('#frm_general_expense').on('submit', function(e) {
         e.preventDefault();
         let btn = $(this).find('button[type="submit"]');
         let origText = btn.text();
-        btn.text('...').prop('disabled', true);
+        btn.text('Saving...').prop('disabled', true);
 
         $.post(tcc_exp_obj.ajax_url, {
             action: 'tcc_save_general_expense',
-            date: $('#ge_date').val(), cat: $('#ge_cat').val(), desc: $('#ge_desc').val(), amount: $('#ge_amt').val()
+            id: $('#ge_id').val(),
+            date: $('#ge_date').val(), 
+            cat: $('#ge_cat').val(), 
+            desc: $('#ge_desc').val(), 
+            amount: $('#ge_amt').val()
         }, function(res) {
-            btn.text(origText).prop('disabled', false);
+            btn.prop('disabled', false);
             if(res.success) {
-                $('#ge_desc, #ge_amt').val('');
+                $('#ge_id').val('');
+                $('#frm_general_expense')[0].reset();
+                btn.text('Add');
+                $('#ge_cancel_edit').hide();
                 loadMasterData();
+            } else {
+                btn.text(origText);
+                alert("Error saving expense.");
             }
         });
+    });
+
+    $(document).on('click', '.edit-ge-btn', function() {
+        $('#ge_id').val($(this).data('id'));
+        $('#ge_date').val($(this).data('date'));
+        $('#ge_cat').val($(this).data('cat'));
+        $('#ge_desc').val($(this).data('desc'));
+        $('#ge_amt').val($(this).data('amount'));
+        
+        $('#frm_general_expense button[type="submit"]').text('Update');
+        $('#ge_cancel_edit').show();
+        
+        $('html, body').animate({
+            scrollTop: $("#frm_general_expense").offset().top - 80
+        }, 300);
+    });
+
+    $('#ge_cancel_edit').on('click', function() {
+        $('#ge_id').val('');
+        $('#frm_general_expense')[0].reset();
+        $('#frm_general_expense button[type="submit"]').text('Add');
+        $(this).hide();
     });
 
     $(document).on('click', '.del-ge-btn', function() {
@@ -280,7 +340,7 @@ jQuery(document).ready(function($) {
 
     function renderAutoExpenses() {
         let html = '';
-        if(masterData.auto_expenses.length === 0) {
+        if(!masterData.auto_expenses || masterData.auto_expenses.length === 0) {
             html = '<div style="padding:15px; text-align:center; color:#64748b;">No automatic daily expenses set up.</div>';
         } else {
             html += `<table style="width:100%; border-collapse:collapse; text-align:left;">
@@ -311,11 +371,16 @@ jQuery(document).ready(function($) {
             cat: $('#ae_cat').val(), desc: $('#ae_desc').val(), amount: $('#ae_amt').val()
         }, function(res) {
             btn.text(origText).prop('disabled', false);
-            if(res.success) {
+            if(res && res.success) {
                 $('#ae_desc, #ae_amt').val('');
                 loadMasterData();
                 alert("Recurring expense added! It will be automatically logged to your everyday expenses starting today.");
+            } else {
+                alert("Error: Data could not be saved. Please check your inputs.");
             }
+        }).fail(function() {
+            btn.text(origText).prop('disabled', false);
+            alert("Server Error: Your database could not process the request.");
         });
     });
 
@@ -542,9 +607,9 @@ jQuery(document).ready(function($) {
         let expectedProfit = pkg_value - expectedTotalCost + manualProfit;
         $('#bk_expected_profit').text(expFormatINR(expectedProfit)).css('color', expectedProfit < 0 ? '#dc2626' : '#0ea5e9');
 
-        let base_threshold = parseFloat(b.auto_cost) || 0;
-        if (income <= base_threshold) {
-            $('#bk_unconfirmed_warning').fadeIn();
+        let is_fully_paid_live = income >= (pkg_value - 1);
+        if (!is_fully_paid_live) {
+            $('#bk_unconfirmed_warning').text('⚠️ Profit Excluded from Master Dashboard (Customer Payment Pending)').fadeIn();
         } else {
             $('#bk_unconfirmed_warning').hide();
         }
@@ -558,7 +623,6 @@ jQuery(document).ready(function($) {
         let origText = btn.text();
         btn.text('Saving...').prop('disabled', true);
 
-        // Don't send addon rows back to avoid double counting
         let data = $('#bk_dashboard :input').not('.is-addon :input').serializeArray();
         data.push({name: 'action', value: 'tcc_save_booking_expense'});
         data.push({name: 'quote_id', value: qid});
