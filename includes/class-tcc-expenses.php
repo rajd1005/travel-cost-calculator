@@ -10,8 +10,9 @@ function tcc_enqueue_expense_scripts() {
         wp_enqueue_style( 'flatpickr-css', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css', array(), '4.6.13' );
         wp_enqueue_script( 'flatpickr-js', 'https://cdn.jsdelivr.net/npm/flatpickr', array(), '4.6.13', true );
         
-        // Version bumped to 3.0 to clear cache
-        wp_enqueue_script( 'tcc-expenses-js', plugin_dir_url( dirname(__FILE__) ) . 'assets/js/tcc-expenses.js', array('jquery', 'flatpickr-js'), '3.0', true );
+        // FOOLPROOF CACHE BUSTER: Forces the browser to download a new file every time
+        $cache_buster = uniqid('v_');
+        wp_enqueue_script( 'tcc-expenses-js', plugin_dir_url( dirname(__FILE__) ) . 'assets/js/tcc-expenses.js?ver=' . $cache_buster, array('jquery', 'flatpickr-js'), null, true );
         wp_localize_script( 'tcc-expenses-js', 'tcc_exp_obj', array(
             'ajax_url' => admin_url( 'admin-ajax.php' )
         ));
@@ -137,7 +138,7 @@ function tcc_render_expense_calculator() {
                 </form>
                 
                 <h4 style="margin: 15px 0 8px; font-size:13px;">Expense History <span style="font-weight:normal; font-size:11px; color:#64748b;">(Auto-added daily expenses appear here for you to edit/delete)</span></h4>
-                <div id="ge_history_table" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; overflow:hidden;"></div>
+                <div id="ge_history_table" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; overflow:hidden; padding:15px; text-align:center; color:#64748b;">Loading expenses...</div>
             </div>
         </div>
 
@@ -145,6 +146,7 @@ function tcc_render_expense_calculator() {
             <div class="tcc-card" style="border-left: 4px solid #0284c7;">
                 <div class="tcc-card-title">Setup Recurring Daily Expenses</div>
                 <form id="frm_auto_expense" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
+                    <input type="hidden" id="ae_id" value="">
                     <select id="ae_cat" required style="flex:1.5; min-width:130px;">
                         <option value="">-- Category --</option>
                         <option value="Facebook/Google Ads">Facebook/Google Ads</option>
@@ -155,9 +157,10 @@ function tcc_render_expense_calculator() {
                     <input type="text" id="ae_desc" placeholder="Details" style="flex:2; min-width:150px;" required>
                     <input type="number" id="ae_amt" step="0.01" min="1" placeholder="Daily Amt (₹)" required style="flex:1; min-width:100px;">
                     <button type="submit" class="tcc-btn-primary" style="margin:0; flex:1; min-width:80px;">Set Daily</button>
+                    <button type="button" id="ae_cancel_edit" class="tcc-btn-secondary" style="display:none; margin:0; flex:0.5; min-width:60px;">Cancel</button>
                 </form>
                 
-                <div id="ae_history_table" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; overflow:hidden; margin-top:15px;"></div>
+                <div id="ae_history_table" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; overflow:hidden; margin-top:15px; padding:15px; text-align:center; color:#64748b;">Loading recurring setups...</div>
             </div>
         </div>
 

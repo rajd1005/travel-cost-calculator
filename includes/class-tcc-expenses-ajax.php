@@ -17,11 +17,11 @@ function tcc_load_master_finances_ajax() {
     
     if ($last_run !== $today) {
         $recurring = get_option('tcc_auto_daily_expenses', array());
-        if (!is_array($recurring)) $recurring = array(); // FIX: Ensure array
+        if (!is_array($recurring)) $recurring = array(); 
 
         if (!empty($recurring)) {
             $general = get_option('tcc_general_expenses', array());
-            if (!is_array($general)) $general = array(); // FIX: Ensure array
+            if (!is_array($general)) $general = array(); 
 
             $start_ts = empty($last_run) ? strtotime($today) : strtotime($last_run . ' +1 day');
             $today_ts = strtotime($today);
@@ -42,7 +42,7 @@ function tcc_load_master_finances_ajax() {
                     $changed = true;
                 }
             }
-            if ($changed) update_option('tcc_general_expenses', $general);
+            if ($changed) update_option('tcc_general_expenses', array_values($general));
         }
         update_option('tcc_last_auto_expense_date', $today);
     }
@@ -165,12 +165,15 @@ function tcc_load_master_finances_ajax() {
         );
     }
 
+    // Force strict JSON arrays
     $general_expenses = get_option('tcc_general_expenses', array());
-    if(!is_array($general_expenses)) $general_expenses = array(); // FIX Ensure array
+    if(!is_array($general_expenses)) $general_expenses = array();
+    $general_expenses = array_values($general_expenses); 
     usort($general_expenses, function($a, $b) { return strtotime($b['date']) - strtotime($a['date']); });
 
     $auto_expenses = get_option('tcc_auto_daily_expenses', array());
-    if(!is_array($auto_expenses)) $auto_expenses = array(); // FIX Ensure array
+    if(!is_array($auto_expenses)) $auto_expenses = array();
+    $auto_expenses = array_values($auto_expenses); 
 
     wp_send_json_success(array(
         'bookings' => $bookings_data,
@@ -242,7 +245,7 @@ function tcc_save_general_expense_ajax() {
     if(empty($date) || empty($cat) || $amount <= 0) wp_send_json_error("Invalid input");
     
     $general = get_option('tcc_general_expenses', array());
-    if(!is_array($general)) $general = array(); // FIX Ensure array
+    if(!is_array($general)) $general = array(); 
     
     if (!empty($id)) {
         // UPDATE Existing Expense
@@ -260,7 +263,7 @@ function tcc_save_general_expense_ajax() {
         $general[] = array('id' => uniqid('ge_'), 'date' => $date, 'category' => $cat, 'desc' => $desc, 'amount' => $amount);
     }
     
-    update_option('tcc_general_expenses', $general);
+    update_option('tcc_general_expenses', array_values($general));
     wp_send_json_success();
 }
 
@@ -268,24 +271,43 @@ function tcc_delete_general_expense_ajax() {
     if ( ! is_user_logged_in() ) wp_die();
     $id = sanitize_text_field($_POST['id']);
     $general = get_option('tcc_general_expenses', array());
-    if(!is_array($general)) $general = array(); // FIX Ensure array
+    if(!is_array($general)) $general = array(); 
     $new_general = array();
     foreach($general as $ge) { if($ge['id'] !== $id) $new_general[] = $ge; }
-    update_option('tcc_general_expenses', $new_general);
+    
+    update_option('tcc_general_expenses', array_values($new_general));
     wp_send_json_success();
 }
 
 function tcc_save_auto_expense_ajax() {
     if ( ! is_user_logged_in() ) wp_die();
+    
+    $id = isset($_POST['id']) ? sanitize_text_field($_POST['id']) : '';
     $cat = sanitize_text_field($_POST['cat']);
     $desc = sanitize_text_field($_POST['desc']);
     $amount = floatval($_POST['amount']);
+    
     if(empty($cat) || $amount <= 0) wp_send_json_error("Invalid input");
     
     $autos = get_option('tcc_auto_daily_expenses', array());
-    if(!is_array($autos)) $autos = array(); // FIX Ensure array
-    $autos[] = array('id' => uniqid('ae_'), 'category' => $cat, 'desc' => $desc, 'amount' => $amount);
-    update_option('tcc_auto_daily_expenses', $autos);
+    if(!is_array($autos)) $autos = array(); 
+    
+    if (!empty($id)) {
+        // UPDATE Existing Setup
+        foreach ($autos as &$a) {
+            if ($a['id'] === $id) {
+                $a['category'] = $cat;
+                $a['desc'] = $desc;
+                $a['amount'] = $amount;
+                break;
+            }
+        }
+    } else {
+        // INSERT New Setup
+        $autos[] = array('id' => uniqid('ae_'), 'category' => $cat, 'desc' => $desc, 'amount' => $amount);
+    }
+    
+    update_option('tcc_auto_daily_expenses', array_values($autos));
     wp_send_json_success();
 }
 
@@ -293,9 +315,11 @@ function tcc_delete_auto_expense_ajax() {
     if ( ! is_user_logged_in() ) wp_die();
     $id = sanitize_text_field($_POST['id']);
     $autos = get_option('tcc_auto_daily_expenses', array());
-    if(!is_array($autos)) $autos = array(); // FIX Ensure array
+    if(!is_array($autos)) $autos = array(); 
+    
     $new_autos = array();
     foreach($autos as $a) { if($a['id'] !== $id) $new_autos[] = $a; }
-    update_option('tcc_auto_daily_expenses', $new_autos);
+    
+    update_option('tcc_auto_daily_expenses', array_values($new_autos));
     wp_send_json_success();
 }
