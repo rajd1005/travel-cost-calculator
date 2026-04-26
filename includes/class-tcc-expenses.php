@@ -10,7 +10,6 @@ function tcc_enqueue_expense_scripts() {
         wp_enqueue_style( 'flatpickr-css', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css', array(), '4.6.13' );
         wp_enqueue_script( 'flatpickr-js', 'https://cdn.jsdelivr.net/npm/flatpickr', array(), '4.6.13', true );
         
-        // FOOLPROOF CACHE BUSTER: Forces the browser to download a new file every time
         $cache_buster = uniqid('v_');
         wp_enqueue_script( 'tcc-expenses-js', plugin_dir_url( dirname(__FILE__) ) . 'assets/js/tcc-expenses.js?ver=' . $cache_buster, array('jquery', 'flatpickr-js'), null, true );
         wp_localize_script( 'tcc-expenses-js', 'tcc_exp_obj', array(
@@ -33,16 +32,10 @@ function tcc_render_expense_calculator() {
         
         if (is_array($payments)) {
             foreach($payments as $p) {
-                if (isset($p['method']) && $p['method'] !== 'Refund' && floatval($p['amount']) > 0) { 
-                    $has_income = true; 
-                    break; 
-                }
+                if (isset($p['method']) && $p['method'] !== 'Refund' && floatval($p['amount']) > 0) { $has_income = true; break; }
             }
         }
-        
-        if ($status === 'Booking Done' || $has_income) {
-            $booked_quotes[] = $q;
-        }
+        if ($status === 'Booking Done' || $has_income) $booked_quotes[] = $q;
     }
 
     ob_start(); ?>
@@ -111,10 +104,19 @@ function tcc_render_expense_calculator() {
             </div>
         </div>
 
+        <datalist id="tcc_cat_list">
+            <option value="Facebook/Google Ads">
+            <option value="Office Rent">
+            <option value="Salaries">
+            <option value="Software Subscriptions">
+            <option value="Misc/Other">
+        </datalist>
+
         <div class="tcc-exp-tabs">
             <div class="tcc-exp-tab active" data-target="sec_general">🏢 Everyday Agency Expenses</div>
-            <div class="tcc-exp-tab" data-target="sec_auto_daily">⚙️ Auto-Daily Setup</div>
+            <div class="tcc-exp-tab" data-target="sec_auto_daily">⚙️ Auto-Recurring Setup</div>
             <div class="tcc-exp-tab" data-target="sec_bookings">✈️ Booking-Specific Expenses</div>
+            <div class="tcc-exp-tab" data-target="sec_partners">🤝 Partner P&L & Distribution</div>
         </div>
 
         <div id="sec_general" class="tcc-exp-section active">
@@ -123,43 +125,33 @@ function tcc_render_expense_calculator() {
                 <form id="frm_general_expense" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
                     <input type="hidden" id="ge_id" value="">
                     <input type="date" id="ge_date" required style="flex:1; min-width:110px;">
-                    <select id="ge_cat" required style="flex:1.5; min-width:130px;">
-                        <option value="">-- Category --</option>
-                        <option value="Facebook/Google Ads">Facebook/Google Ads</option>
-                        <option value="Office Rent">Office Rent</option>
-                        <option value="Salaries">Salaries</option>
-                        <option value="Software Subscriptions">Software Subscriptions</option>
-                        <option value="Misc/Other">Misc/Other</option>
-                    </select>
+                    <input type="text" id="ge_cat" list="tcc_cat_list" placeholder="-- Category (Select or Type) --" required style="flex:1.5; min-width:130px;">
                     <input type="text" id="ge_desc" placeholder="Details" style="flex:2; min-width:150px;">
                     <input type="number" id="ge_amt" step="0.01" min="1" placeholder="Amount (₹)" required style="flex:1; min-width:100px;">
                     <button type="submit" class="tcc-btn-primary" style="margin:0; flex:1; min-width:80px;">Add</button>
                     <button type="button" id="ge_cancel_edit" class="tcc-btn-secondary" style="display:none; margin:0; flex:0.5; min-width:60px;">Cancel</button>
                 </form>
                 
-                <h4 style="margin: 15px 0 8px; font-size:13px;">Expense History <span style="font-weight:normal; font-size:11px; color:#64748b;">(Auto-added daily expenses appear here for you to edit/delete)</span></h4>
+                <h4 style="margin: 15px 0 8px; font-size:13px;">Expense History</h4>
                 <div id="ge_history_table" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; overflow:hidden; padding:15px; text-align:center; color:#64748b;">Loading expenses...</div>
             </div>
         </div>
 
         <div id="sec_auto_daily" class="tcc-exp-section">
             <div class="tcc-card" style="border-left: 4px solid #0284c7;">
-                <div class="tcc-card-title">Setup Recurring Daily Expenses</div>
+                <div class="tcc-card-title">Setup Recurring Expenses</div>
                 <form id="frm_auto_expense" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
                     <input type="hidden" id="ae_id" value="">
-                    <select id="ae_cat" required style="flex:1.5; min-width:130px;">
-                        <option value="">-- Category --</option>
-                        <option value="Facebook/Google Ads">Facebook/Google Ads</option>
-                        <option value="Office Rent">Office Rent</option>
-                        <option value="Salaries">Salaries</option>
-                        <option value="Misc/Other">Misc/Other</option>
+                    <input type="text" id="ae_cat" list="tcc_cat_list" placeholder="-- Category (Select or Type) --" required style="flex:1.5; min-width:130px;">
+                    <input type="text" id="ae_desc" placeholder="Details" style="flex:1.5; min-width:130px;" required>
+                    <select id="ae_freq" required style="flex:0.8; min-width:90px;">
+                        <option value="daily">Daily</option>
+                        <option value="monthly">Monthly</option>
                     </select>
-                    <input type="text" id="ae_desc" placeholder="Details" style="flex:2; min-width:150px;" required>
-                    <input type="number" id="ae_amt" step="0.01" min="1" placeholder="Daily Amt (₹)" required style="flex:1; min-width:100px;">
-                    <button type="submit" class="tcc-btn-primary" style="margin:0; flex:1; min-width:80px;">Set Daily</button>
+                    <input type="number" id="ae_amt" step="0.01" min="1" placeholder="Amount (₹)" required style="flex:1; min-width:90px;">
+                    <button type="submit" class="tcc-btn-primary" style="margin:0; flex:1; min-width:80px;">Set Recurring</button>
                     <button type="button" id="ae_cancel_edit" class="tcc-btn-secondary" style="display:none; margin:0; flex:0.5; min-width:60px;">Cancel</button>
                 </form>
-                
                 <div id="ae_history_table" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; overflow:hidden; margin-top:15px; padding:15px; text-align:center; color:#64748b;">Loading recurring setups...</div>
             </div>
         </div>
@@ -167,20 +159,14 @@ function tcc_render_expense_calculator() {
         <div id="sec_bookings" class="tcc-exp-section">
             <div class="tcc-card" style="background:#f8fafc; display:flex; flex-direction:column; gap:10px;">
                 <strong style="color:#334155; font-size:14px;">Select & Search Booking:</strong>
-                
                 <div style="display:flex; gap:5px; font-size:12px;" id="bk_filters">
                     <button type="button" class="bk-filter-btn" data-filter="all" style="padding:4px 10px; border:1px solid #cbd5e1; background:#0f172a; color:#fff; border-radius:4px; cursor:pointer;">All Bookings</button>
                     <button type="button" class="bk-filter-btn" data-filter="advance" style="padding:4px 10px; border:1px solid #cbd5e1; background:#fff; color:#475569; border-radius:4px; cursor:pointer;">⏳ Advance</button>
                     <button type="button" class="bk-filter-btn" data-filter="cust_due" style="padding:4px 10px; border:1px solid #cbd5e1; background:#fff; color:#475569; border-radius:4px; cursor:pointer;">🔴 Cust Due</button>
                     <button type="button" class="bk-filter-btn" data-filter="ven_due" style="padding:4px 10px; border:1px solid #cbd5e1; background:#fff; color:#475569; border-radius:4px; cursor:pointer;">🟠 Ven Due</button>
                 </div>
-
                 <div style="display:flex; gap:10px; align-items:center;">
-                    <div style="flex:1;">
-                        <select id="bk_select" style="width:100%;">
-                            <option value="">Loading Bookings...</option>
-                        </select>
-                    </div>
+                    <div style="flex:1;"><select id="bk_select" style="width:100%;"><option value="">Loading Bookings...</option></select></div>
                     <a href="#" id="bk_view_quote" target="_blank" class="tcc-btn-secondary" style="display:none; margin:0; padding:6px 12px; font-size:12px; text-decoration:none; background:#fff; border-color:#cbd5e1; color:#0f172a; white-space:nowrap;">👁️ View Quote</a>
                 </div>
             </div>
@@ -251,7 +237,51 @@ function tcc_render_expense_calculator() {
                     <div id="bk_expected_profit" style="font-size:22px; font-weight:900;">₹0.00</div>
                     <div id="bk_unconfirmed_warning" style="display:none; font-size:11px; color:#dc2626; margin-top:8px; font-weight:bold;">⚠️ Profit Excluded from Master Dashboard (Customer Payment Pending)</div>
                 </div>
+            </div>
+        </div>
 
+        <div id="sec_partners" class="tcc-exp-section">
+            <div class="tcc-grid-2">
+                <div class="tcc-card" style="border-left: 4px solid #8b5cf6;">
+                    <div class="tcc-card-title">1. Agency Partners Setup</div>
+                    <form id="frm_partner_setup" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; align-items:center;">
+                        <input type="hidden" id="pt_id" value="">
+                        <input type="text" id="pt_name" placeholder="Partner Name" required style="flex:2; min-width:120px;">
+                        <input type="number" id="pt_percent" step="0.01" min="0.01" max="100" placeholder="Share %" required style="flex:1; min-width:80px;">
+                        <button type="submit" class="tcc-btn-primary" style="margin:0; flex:1;">Save</button>
+                        <button type="button" id="pt_cancel_edit" class="tcc-btn-secondary" style="display:none; margin:0; flex:0.5;">Cancel</button>
+                        <div style="width:100%; margin-top:5px; font-size:12px;">
+                            <label style="cursor:pointer; color:#475569;"><input type="checkbox" id="pt_is_investor"> 🏦 This partner is the Company Owner (Reimburse Everyday Expenses to them first)</label>
+                        </div>
+                    </form>
+                    <div id="pt_list_table" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; padding:10px; text-align:center;">Loading...</div>
+                </div>
+
+                <div class="tcc-card" style="border-left: 4px solid #10b981;">
+                    <div class="tcc-card-title">2. Add Custom Daily Profit/Loss</div>
+                    <form id="frm_custom_pl" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
+                        <input type="date" id="cpl_date" required style="flex:1; min-width:110px;">
+                        <select id="cpl_type" required style="flex:1; min-width:90px;">
+                            <option value="profit">Profit (+)</option>
+                            <option value="loss">Loss (-)</option>
+                        </select>
+                        <input type="text" id="cpl_desc" placeholder="Details" required style="flex:2; min-width:130px;">
+                        <input type="number" id="cpl_amt" step="0.01" min="1" placeholder="Amt (₹)" required style="flex:1; min-width:80px;">
+                        <button type="submit" class="tcc-btn-primary" style="margin:0; flex:1;">Add</button>
+                    </form>
+                    <div id="cpl_list_table" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; padding:10px; max-height:165px; overflow-y:auto; text-align:center;">Loading...</div>
+                </div>
+            </div>
+
+            <div class="tcc-card" style="border-left: 4px solid #3b82f6; margin-top:15px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:10px;">
+                    <div class="tcc-card-title" style="margin:0;">3. Daily P&L Ledger & Partner Distribution</div>
+                    <div style="display:flex; gap:5px; align-items:center;">
+                        <input type="text" id="pt_filter_range" placeholder="Filter Ledger Range..." readonly style="height:28px; font-size:12px; border:1px solid #94a3b8; border-radius:3px; padding:2px 8px; min-width:180px; background:#fff; cursor:pointer;">
+                        <a href="#" id="pt_filter_clear" style="font-size:11px; color:#dc2626; text-decoration:none; font-weight:bold;">Clear</a>
+                    </div>
+                </div>
+                <div id="pt_ledger_table" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; overflow-x:auto; text-align:center;">Loading ledger...</div>
             </div>
         </div>
 
