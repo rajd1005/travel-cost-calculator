@@ -177,13 +177,20 @@ jQuery(document).ready(function($) {
                     if (inPrevBooking) p_income += b_income;
                 }
 
+                // Accurate Live Dashboard Calculations taking into account Exemptions
                 let b_base_cost = (parseFloat(b.auto_cost) || 0) + manualBase;
-                let b_vendor_paid = parseFloat(b.vendor_paid) || 0;
-                let b_actual_pg = parseFloat(b.actual_pg) || 0;
-                let b_actual_paid_expense = b_vendor_paid + parseFloat(b.auto_pt) + b_actual_pg + parseFloat(b.auto_gst);
-                let b_expected_total_expense = b_base_cost + parseFloat(b.auto_pt) + parseFloat(b.auto_pg) + parseFloat(b.auto_gst);
+                let b_vendor_paid = parseFloat(b.vendor_paid) || 0; 
+                let b_vendor_direct = parseFloat(b.vendor_direct) || 0; 
+                let b_discount = parseFloat(b.discount_waived) || 0; 
+                let b_gst_reduction = parseFloat(b.gst_reduction) || 0;
+                
+                let b_actual_paid_expense = b_vendor_paid + parseFloat(b.auto_pt) + parseFloat(b.actual_pg) + parseFloat(b.auto_gst);
+                let b_expected_total_expense = b_base_cost - b_vendor_direct + parseFloat(b.auto_pt) + parseFloat(b.auto_pg) + parseFloat(b.auto_gst);
+                
                 let b_pkg_value = (parseFloat(b.pkg_value) || 0) + manualPkg;
-                let is_fully_paid = b_income >= (b_pkg_value - 1); 
+                let b_effective_pkg_value = b_pkg_value - b_discount - b_vendor_direct - b_gst_reduction;
+                
+                let is_fully_paid = b_income >= (b_effective_pkg_value - 1); 
 
                 if (inCurrentBooking) {
                     t_bookings++; t_travellers += parseInt(b.pax) || 0;
@@ -202,7 +209,7 @@ jQuery(document).ready(function($) {
                     }
                     if (inCurrentFP) {
                         t_expense_paid += b_actual_paid_expense;
-                        t_pt += parseFloat(b.auto_pt) || 0; t_pg += b_actual_pg; t_gst += parseFloat(b.auto_gst) || 0;
+                        t_pt += parseFloat(b.auto_pt) || 0; t_pg += parseFloat(b.actual_pg) || 0; t_gst += parseFloat(b.auto_gst) || 0;
                         t_net_profit += (b_income + manualProfit - b_expected_total_expense);
                     }
                     if (inPrevFP) {
@@ -358,16 +365,30 @@ jQuery(document).ready(function($) {
         if (masterData.bookings) {
             $.each(masterData.bookings, function(id, data) {
                 let flags = []; let isAdvance = false, isCustDue = false, isVenDue = false;
-                let b_inc = parseFloat(data.income) || 0; let b_cost = parseFloat(data.auto_cost) || 0;
+                
+                let manualBase = 0, manualPkg = 0;
+                if(data.quote_addons && data.quote_addons.length > 0) { data.quote_addons.forEach(a => { manualBase += parseFloat(a.amount) || 0; }); }
+                if(data.manual_expenses && data.manual_expenses.length > 0) { 
+                    data.manual_expenses.forEach(me => { 
+                        if(me.type === 'base_cost' || !me.type) manualBase += parseFloat(me.amount) || 0; 
+                        else if(me.type === 'pkg_value') manualPkg += parseFloat(me.amount) || 0; 
+                    }); 
+                }
+                
+                let b_inc = parseFloat(data.income) || 0; 
+                let b_cost = (parseFloat(data.auto_cost) || 0) + manualBase;
+                let b_vendor_paid = parseFloat(data.vendor_paid) || 0;
+                let b_vendor_direct = parseFloat(data.vendor_direct) || 0;
+                let b_discount = parseFloat(data.discount_waived) || 0;
+                let b_gst_reduction = parseFloat(data.gst_reduction) || 0;
+                let b_pkg_value = (parseFloat(data.pkg_value) || 0) + manualPkg;
+                
+                let b_effective_pkg = b_pkg_value - b_discount - b_vendor_direct - b_gst_reduction;
+
                 if (b_inc <= b_cost) { flags.push('⏳ Advance'); isAdvance = true; }
                 
-                let manualBase = 0;
-                if(data.quote_addons && data.quote_addons.length > 0) { data.quote_addons.forEach(a => { manualBase += parseFloat(a.amount) || 0; }); }
-                if(data.manual_expenses && data.manual_expenses.length > 0) { data.manual_expenses.forEach(me => { if(me.type === 'base_cost' || !me.type) manualBase += parseFloat(me.amount) || 0; }); }
-                
-                let adj_cost = b_cost + manualBase;
-                let vendor_pending = adj_cost - (parseFloat(data.vendor_paid) || 0);
-                let cust_pending = (parseFloat(data.pkg_value) || 0) - b_inc;
+                let vendor_pending = b_cost - b_vendor_paid - b_vendor_direct;
+                let cust_pending = b_effective_pkg - b_inc;
 
                 if(cust_pending > 0) { flags.push('🔴 Cust Due'); isCustDue = true; }
                 if(vendor_pending > 0) { flags.push('🟠 Ven Due'); isVenDue = true; }
@@ -389,14 +410,20 @@ jQuery(document).ready(function($) {
         else { $sel.val(null).trigger('change'); $('#bk_dashboard').hide(); $('#bk_view_quote').hide(); }
     }
 
-    function addVendorRow(date = '', desc = '', amt = '') {
+    function addVendorRow(date = '', desc = '', amt = '', is_direct = false) {
         let today = new Date().toISOString().split('T')[0]; if(!date) date = today;
+        let rowClass = is_direct ? 'is-direct' : '';
+        let ro = is_direct ? 'readonly style="background:#fef3c7; color:#92400e; border:1px solid #fde68a;" title="Logged via Payments Tab"' : 'style="flex:1; max-width:130px;"';
+        let roDesc = is_direct ? 'readonly style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; flex:2;"' : 'style="flex:2;"';
+        let roAmt = is_direct ? 'readonly style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; font-weight:bold; flex:1; max-width:110px;"' : 'style="flex:1; max-width:110px;"';
+        let btn = is_direct ? '<span style="width:28px; display:inline-block;"></span>' : '<button type="button" class="tcc-btn-del remove-bk-vendor" style="margin:0;">X</button>';
+        
         let html = `
-        <div class="tcc-repeater-row bk-vendor-row" style="margin-bottom:6px; display:flex; gap:6px;">
-            <input type="date" name="vp_date[]" value="${date}" style="flex:1; max-width:130px;" required>
-            <input type="text" name="vp_desc[]" value="${desc}" placeholder="Vendor Name / Details" style="flex:2;" required>
-            <input type="number" name="vp_amt[]" class="bk-vendor-amt" value="${amt}" step="0.01" min="1" placeholder="Amount (₹)" style="flex:1; max-width:110px;" required>
-            <button type="button" class="tcc-btn-del remove-bk-vendor" style="margin:0;">X</button>
+        <div class="tcc-repeater-row bk-vendor-row ${rowClass}" style="margin-bottom:6px; display:flex; gap:6px;">
+            <input type="date" name="${is_direct ? '' : 'vp_date[]'}" value="${date}" ${ro} required>
+            <input type="text" name="${is_direct ? '' : 'vp_desc[]'}" value="${desc}" placeholder="Vendor Name / Details" ${roDesc} required>
+            <input type="number" name="${is_direct ? '' : 'vp_amt[]'}" class="bk-vendor-amt" value="${amt}" step="0.01" min="1" placeholder="Amount (₹)" ${roAmt} required>
+            ${btn}
         </div>`;
         $('#bk_vendor_wrapper').append(html);
     }
@@ -437,7 +464,10 @@ jQuery(document).ready(function($) {
         $('#bk_override_cost').val(b.auto_cost); $('#bk_auto_pt').text(expFormatINR(b.auto_pt)); $('#bk_auto_gst').text(expFormatINR(b.auto_gst));
 
         $('#bk_vendor_wrapper').empty();
-        if(b.vendor_history && b.vendor_history.length > 0) { b.vendor_history.forEach(v => { addVendorRow(v.date, v.desc, v.amount); }); }
+        if(b.vendor_history && b.vendor_history.length > 0) { 
+            b.vendor_history.forEach(v => { addVendorRow(v.date, v.desc, v.amount, v.is_direct); }); 
+        }
+        
         $('#bk_manual_wrapper').empty();
         if(b.quote_addons && b.quote_addons.length > 0) { b.quote_addons.forEach(a => { addManualRow(a.desc, a.amount, a.type, true); }); }
         if(b.manual_expenses && b.manual_expenses.length > 0) { b.manual_expenses.forEach(e => { addManualRow(e.desc, e.amount, e.type, false); }); }
@@ -465,13 +495,22 @@ jQuery(document).ready(function($) {
         $('#bk_total_vendor_paid').text(expFormatINR(vendorTotal));
 
         let pkg_value = (parseFloat(b.pkg_value) || 0) + manualPkg;
-        $('#bk_pkg_value').text(expFormatINR(pkg_value));
+        let waiveHtml = '';
+        if (b.discount_waived > 0) waiveHtml += `<br><span style="color:#0284c7; font-size:11px; font-weight:normal;">- ${expFormatINR(b.discount_waived)} (Discount)</span>`;
+        if (b.vendor_direct > 0) waiveHtml += `<br><span style="color:#d97706; font-size:11px; font-weight:normal;">- ${expFormatINR(b.vendor_direct)} (Cust Paid Vendor)</span>`;
+        if (b.gst_reduction > 0) waiveHtml += `<br><span style="color:#16a34a; font-size:11px; font-weight:normal;">- ${expFormatINR(b.gst_reduction)} (Tax Savings)</span>`;
         
-        let cust_pending = pkg_value - income; if(cust_pending < 0) cust_pending = 0;
+        let effective_pkg = pkg_value - (parseFloat(b.discount_waived)||0) - (parseFloat(b.vendor_direct)||0) - (parseFloat(b.gst_reduction)||0);
+
+        $('#bk_pkg_value').html(`${expFormatINR(pkg_value)}${waiveHtml}<br><strong style="font-size:14px; color:#0f172a;">Net Expected: ${expFormatINR(effective_pkg)}</strong>`);
+        
+        let cust_pending = effective_pkg - income; 
+        if(cust_pending < 0) cust_pending = 0;
         if(cust_pending > 0) { $('#bk_cust_pending').text(expFormatINR(cust_pending)); $('#bk_cust_pending_badge').fadeIn(); } else { $('#bk_cust_pending_badge').hide(); }
 
         let current_base_cost = (parseFloat($('#bk_override_cost').val()) || 0) + manualBase;
-        let pending = current_base_cost - vendorTotal; if(pending < 0) pending = 0;
+        let pending = current_base_cost - vendorTotal; 
+        if(pending < 0) pending = 0;
         $('#bk_pending_cost').text(expFormatINR(pending));
 
         if(pending > 0) { $('#bk_vendor_pending_badge').css('color', '#dc2626').show(); } else { $('#bk_vendor_pending_badge').css('color', '#16a34a'); $('#bk_pending_cost').text('All Cleared ✔'); }
@@ -479,13 +518,13 @@ jQuery(document).ready(function($) {
         let auto_pt = parseFloat(b.auto_pt) || 0; let auto_pg = parseFloat(b.auto_pg) || 0; let actual_pg = parseFloat(b.actual_pg) || 0; let auto_gst = parseFloat(b.auto_gst) || 0;
         $('#bk_auto_pg').html(`${expFormatINR(auto_pg)} <span style="color:#64748b; font-size:10px; font-weight:normal;">(Actual: ${expFormatINR(actual_pg)})</span>`);
 
-        let expectedTotalCost = current_base_cost + auto_pt + auto_pg + auto_gst;
+        let expectedTotalCost = current_base_cost - (parseFloat(b.vendor_direct)||0) + auto_pt + auto_pg + auto_gst;
         $('#bk_auto_total').text(expFormatINR(expectedTotalCost));
 
-        let expectedProfit = pkg_value - expectedTotalCost + manualProfit;
+        let expectedProfit = effective_pkg - expectedTotalCost + manualProfit;
         $('#bk_expected_profit').text(expFormatINR(expectedProfit)).css('color', expectedProfit < 0 ? '#dc2626' : '#0ea5e9');
 
-        let is_fully_paid_live = income >= (pkg_value - 1);
+        let is_fully_paid_live = income >= (effective_pkg - 1);
         if (!is_fully_paid_live) { $('#bk_unconfirmed_warning').text('⚠️ Profit Excluded from Master Dashboard (Customer Payment Pending)').fadeIn(); } else { $('#bk_unconfirmed_warning').hide(); }
     }
 
@@ -681,11 +720,17 @@ jQuery(document).ready(function($) {
                 });
                 
                 let b_base_cost = (parseFloat(b.auto_cost)||0) + manualBase;
-                let expectedTotalCost = b_base_cost + parseFloat(b.auto_pt||0) + parseFloat(b.auto_pg||0) + parseFloat(b.auto_gst||0);
+                let b_vendor_direct = parseFloat(b.vendor_direct) || 0;
+                let expectedTotalCost = b_base_cost - b_vendor_direct + parseFloat(b.auto_pt||0) + parseFloat(b.auto_pg||0) + parseFloat(b.auto_gst||0);
+                
                 let pkg_value = (parseFloat(b.pkg_value)||0) + manualPkg;
+                let b_discount = parseFloat(b.discount_waived) || 0;
+                let b_gst_reduction = parseFloat(b.gst_reduction) || 0;
+                let b_effective_pkg_value = pkg_value - b_discount - b_vendor_direct - b_gst_reduction;
+
                 let income = parseFloat(b.income)||0;
 
-                if (income >= (pkg_value - 1)) {
+                if (income >= (b_effective_pkg_value - 1)) {
                     let fpDate = b.final_payment_date || b.booking_date;
                     let b_net_profit = (income + manualProfit) - expectedTotalCost;
                     getDay(fpDate).booking_profit += b_net_profit;

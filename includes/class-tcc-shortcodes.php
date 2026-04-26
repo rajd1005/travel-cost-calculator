@@ -744,6 +744,8 @@ function tcc_render_settings_dashboard() {
                                 <option value="Bank Transfer">Bank Transfer</option>
                                 <option value="Cash">Cash</option>
                                 <option value="Card">Card</option>
+                                <option value="Discount" style="color:#0284c7; font-weight:bold;">Discount / Waive Off</option>
+                                <option value="Customer Paid Vendor" style="color:#d97706; font-weight:bold;">Customer Paid Vendor</option>
                                 <option value="Refund" style="color:red; font-weight:bold;">Refund / Cancellation</option>
                             </select>
                             <input type="text" id="pmt_ref" placeholder="Txn Ref / Details" style="flex:2; min-width:150px;">

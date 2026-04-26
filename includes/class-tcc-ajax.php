@@ -37,7 +37,7 @@ add_action( 'wp_ajax_tcc_add_payment', 'tcc_add_payment' );
 add_action( 'wp_ajax_tcc_delete_payment', 'tcc_delete_payment' );
 
 add_action( 'wp_ajax_tcc_delete_quote', 'tcc_delete_quote' );
-add_action( 'wp_ajax_tcc_duplicate_quote', 'tcc_duplicate_quote' ); // NEW DUPLICATE ACTION
+add_action( 'wp_ajax_tcc_duplicate_quote', 'tcc_duplicate_quote' ); 
 add_action( 'wp_ajax_tcc_update_quote_client', 'tcc_update_quote_client' );
 add_action( 'wp_ajax_tcc_get_full_quote_data', 'tcc_get_full_quote_data' );
 
@@ -627,7 +627,6 @@ function tcc_calculate_trip() {
     ));
 }
 
-// NEW FUNCTION: Duplicate Quote Action
 function tcc_duplicate_quote() {
     if ( ! is_user_logged_in() ) wp_die();
     $quote_id = intval($_POST['quote_id']);
@@ -649,16 +648,13 @@ function tcc_duplicate_quote() {
         'post_type' => 'tcc_quote',
         'post_name' => $random_string,
         'post_title' => $post_title,
-        'post_content' => wp_slash( $post->post_content ), // Directly clone the identical JSON content
+        'post_content' => wp_slash( $post->post_content ), 
         'post_status' => 'publish'
     ));
 
     if(is_wp_error($new_post_id)) {
         wp_send_json_error('Failed to duplicate.');
     }
-
-    // Notice we DO NOT copy over post_meta for "tcc_payments" or "tcc_lead_status".
-    // This correctly makes the duplicate an empty slate waiting to be turned into a new option!
 
     wp_send_json_success(array(
         'new_id' => $new_post_id,
@@ -1031,8 +1027,10 @@ function tcc_load_quote_payments() {
     
     $status = get_post_meta($post_id, 'tcc_lead_status', true);
 
-    $total_paid = 0;
+    $total_paid_agency = 0;
     $total_refunded = 0;
+    $total_discount = 0;
+    $total_vendor_direct = 0; 
     $total_actual_pg = 0; 
     $has_refund = false;
 
@@ -1041,20 +1039,36 @@ function tcc_load_quote_payments() {
         if (isset($p['method']) && $p['method'] === 'Refund') {
             $total_refunded += floatval($p['amount']);
             $has_refund = true;
+        } elseif (isset($p['method']) && $p['method'] === 'Discount') {
+            $total_discount += floatval($p['amount']);
+        } elseif (isset($p['method']) && $p['method'] === 'Customer Paid Vendor') {
+            $total_vendor_direct += floatval($p['amount']);
         } else {
-            $total_paid += floatval($p['amount']); 
+            $total_paid_agency += floatval($p['amount']); 
             $total_actual_pg += $pg_fee; 
         }
     }
     
     $is_cancelled = ($has_refund || $status === 'Canceled');
-    $retained_income = max(0, $total_paid - $total_refunded);
-    $balance = $is_cancelled ? 0 : max(0, $grand_total - $total_paid);
-    $net_in_bank = $total_paid - $total_actual_pg; 
+    $retained_income = max(0, $total_paid_agency - $total_refunded);
+    
+    $gst_pct = isset($data['summary']['gst_pct']) ? floatval($data['summary']['gst_pct']) : 5;
+    $M = 1 + ($gst_pct / 100);
+    $gst_savings = $total_vendor_direct - ($total_vendor_direct / $M);
+
+    $effective_grand_total = $grand_total - $total_discount - $gst_savings;
+    
+    $balance = $is_cancelled ? 0 : max(0, $effective_grand_total - $total_paid_agency - $total_vendor_direct);
+    
+    $net_in_bank = $total_paid_agency - $total_actual_pg; 
 
     wp_send_json_success(array(
-        'grand_total' => $grand_total,
-        'total_paid' => $total_paid,
+        'original_grand_total' => $grand_total,
+        'grand_total' => $effective_grand_total,
+        'total_discount' => $total_discount,
+        'total_vendor_direct' => $total_vendor_direct,
+        'gst_savings' => $gst_savings,
+        'total_paid' => $total_paid_agency,
         'total_actual_pg' => $total_actual_pg,
         'net_in_bank' => $net_in_bank,
         'total_refunded' => $total_refunded,

@@ -1024,11 +1024,10 @@ jQuery(document).ready(function($) {
         }
         
         msg += `\n*Pricing Summary:*\n`;
-        msg += `Per Person (Excl. GST): ${pp_base}\n`;
         msg += `Total Base (${pax_count} Pax): ${total_base}\n`;
         msg += `GST (${gst_pct}%): ${gst}\n`;
         if(d.discount_amount > 0) msg += `(Note: A discount of ${discount} was applied to your base price)\n`;
-        msg += `\n*Total Quote:* ${total}\n`;
+        msg += `\n*Total Package Value:* ${total}\n`;
         msg += `*Per Person (Inc. GST):* ${pp_gst}\n\n`;
 
         msg += `*View Detailed Itinerary, Receipts & Quote here:*\n${link}`;
@@ -1918,7 +1917,13 @@ jQuery(document).ready(function($) {
     $('#pmt_method').on('change', function() {
         let btn = $('#tcc-add-payment-form button[type="submit"]');
         if($(this).val() === 'Refund') {
-            btn.text('Process Refund').css({'background': '#dc2626', 'border-color': '#b91c1c'});
+            btn.text('Process Refund').css({'background': '#dc2626', 'border-color': '#b91c1c', 'color': '#fff'});
+        } else if($(this).val() === 'Discount') {
+            btn.text('Apply Discount').css({'background': '#0284c7', 'border-color': '#0369a1', 'color': '#fff'});
+            $('#pmt_pg_fee').val(0); // Typically no PG fee for a discount
+        } else if($(this).val() === 'Customer Paid Vendor') {
+            btn.text('Log Vendor Direct').css({'background': '#d97706', 'border-color': '#b45309', 'color': '#fff'});
+            $('#pmt_pg_fee').val(0); // No PG fee for direct vendor
         } else {
             let btnText = $('#pmt_edit_id').val() ? 'Update Record' : 'Add Record';
             btn.text(btnText).removeAttr('style');
@@ -1940,10 +1945,17 @@ jQuery(document).ready(function($) {
                     $('#pmt_balance_val').parent().find('div:first').text('CANCELLATION INCOME');
                     $('#pmt_balance_val').text(formatINR(res.data.retained_income)).css('color', '#16a34a');
                 } else {
-                    $('#pmt_total_val').text(formatINR(res.data.grand_total));
-                    $('#pmt_received_val').parent().find('div:first').text('RECEIVED (GROSS)');
-                    $('#pmt_received_val').html(`${formatINR(res.data.total_paid)}<br><span style="font-size:11px; color:#64748b; font-weight:normal;">Net in Bank: ${formatINR(res.data.net_in_bank)}</span>`).css('color', '#16a34a');
-                    $('#pmt_balance_val').parent().find('div:first').text('BALANCE DUE');
+                    let exemptions = '';
+                    if(res.data.total_discount > 0) exemptions += `<span style="font-size:11px; color:#0284c7;">- ${formatINR(res.data.total_discount)} (Discount)</span><br>`;
+                    if(res.data.gst_savings > 0) exemptions += `<span style="font-size:11px; color:#16a34a;">- ${formatINR(res.data.gst_savings)} (GST Exemption)</span><br>`;
+                    
+                    $('#pmt_total_val').html(`${formatINR(res.data.original_grand_total)} <br>${exemptions}<strong style="font-size:14px; color:#0f172a;">Net Pkg: ${formatINR(res.data.grand_total)}</strong>`);
+                    
+                    $('#pmt_received_val').parent().find('div:first').text('AGENCY RECEIVED');
+                    let vendorDirectHtml = res.data.total_vendor_direct > 0 ? `<br><span style="font-size:11px; color:#d97706;">+ ${formatINR(res.data.total_vendor_direct)} (Vendor Direct)</span>` : '';
+                    $('#pmt_received_val').html(`${formatINR(res.data.total_paid)}${vendorDirectHtml}<br><span style="font-size:11px; color:#64748b; font-weight:normal;">Net in Bank: ${formatINR(res.data.net_in_bank)}</span>`).css('color', '#16a34a');
+                    
+                    $('#pmt_balance_val').parent().find('div:first').text('BALANCE DUE (TO AGENCY)');
                     $('#pmt_balance_val').text(formatINR(res.data.balance)).css('color', '#dc2626');
                 }
 
@@ -1955,17 +1967,20 @@ jQuery(document).ready(function($) {
                         </tr>`;
                     $.each(res.data.payments, function(i, p) {
                         let isRefund = (p.method === 'Refund');
-                        let amtColor = isRefund ? '#dc2626' : '#16a34a';
-                        let amtPrefix = isRefund ? '-' : '';
+                        let isDiscount = (p.method === 'Discount');
+                        let isVendorDirect = (p.method === 'Customer Paid Vendor');
+                        let amtColor = isRefund ? '#dc2626' : (isDiscount ? '#0284c7' : (isVendorDirect ? '#d97706' : '#16a34a'));
+                        let amtPrefix = isRefund || isDiscount ? '-' : '';
                         
                         let pgFee = p.pg_fee ? parseFloat(p.pg_fee) : 0;
-                        let netBank = parseFloat(p.amount) - pgFee;
+                        let netBank = (isDiscount || isVendorDirect) ? 0 : parseFloat(p.amount) - pgFee;
+                        let netBankStr = (isDiscount || isVendorDirect) ? '-' : amtPrefix + formatINR(netBank);
 
                         phtml += `<tr style="border-bottom:1px solid #f1f5f9;">
                             <td style="padding:8px;">${p.date}</td>
                             <td style="padding:8px; font-weight:bold; color:${amtColor};">${amtPrefix}${formatINR(p.amount)}</td>
                             <td style="padding:8px; color:#dc2626;">${pgFee > 0 ? '-' + formatINR(pgFee) : '-'}</td>
-                            <td style="padding:8px; font-weight:bold; color:#16a34a;">${amtPrefix}${formatINR(netBank)}</td>
+                            <td style="padding:8px; font-weight:bold; color:#16a34a;">${netBankStr}</td>
                             <td style="padding:8px;">${p.method}</td>
                             <td style="padding:8px; color:#64748b;">${p.ref}</td>
                             <td style="padding:8px; text-align:right;">
@@ -1995,8 +2010,14 @@ jQuery(document).ready(function($) {
         $('#pmt_ref').val(p.ref);
         
         let btn = $('#tcc-add-payment-form button[type="submit"]');
-        if(p.method !== 'Refund') {
-            btn.text('Update Record');
+        if(p.method === 'Refund') {
+            btn.text('Process Refund').css({'background': '#dc2626', 'border-color': '#b91c1c', 'color': '#fff'});
+        } else if(p.method === 'Discount') {
+            btn.text('Update Discount').css({'background': '#0284c7', 'border-color': '#0369a1', 'color': '#fff'});
+        } else if(p.method === 'Customer Paid Vendor') {
+            btn.text('Update Vendor Direct').css({'background': '#d97706', 'border-color': '#b45309', 'color': '#fff'});
+        } else {
+            btn.text('Update Record').removeAttr('style');
         }
         $('#pmt_cancel_edit_btn').show();
         $('html, body').animate({ scrollTop: $('#tcc-add-payment-wrapper').offset().top - 50 }, 300);
