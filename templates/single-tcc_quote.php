@@ -28,34 +28,49 @@ function tcc_format_inr($num) {
     return '₹' . $thecash . $decimal;
 }
 
-// Function to safely turn newlines into HTML bullets (for Inclusions/Exclusions)
+// Helper to convert Rich Text HTML to Plain Text for WhatsApp Copying
+function tcc_html_to_wa($html, $bullet = "•") {
+    if (empty(trim(wp_strip_all_tags($html)))) return "";
+    $text = str_ireplace(array('<br>', '<br/>', '<br />'), "\n", $html);
+    $text = str_ireplace('</p>', "\n\n", $text);
+    $text = preg_replace('/<li[^>]*>/i', "\n" . $bullet . " ", $text);
+    $text = wp_strip_all_tags($text);
+    $text = html_entity_decode($text, ENT_QUOTES, 'UTF-8');
+    $text = preg_replace("/\n{3,}/", "\n\n", $text); // Clean excessive newlines
+    return trim($text);
+}
+
+// Function to safely turn newlines into HTML bullets OR output existing HTML cleanly
 function tcc_render_bullets($text) {
-    if (empty(trim($text))) return "<p style='font-size:12px; color:#64748b; margin:0;'>None specified.</p>";
+    if (empty(trim(wp_strip_all_tags($text)))) return "<p style='font-size:13px; color:#64748b; margin:0;'>None specified.</p>";
+    
+    // If it has HTML tags (from Rich Text Editor), render natively
+    if (strpos($text, '<li') !== false || strpos($text, '<p') !== false || strpos($text, '<div') !== false) {
+        return "<div class='tcc-rte-display' style='font-size:13px; line-height:1.6;'>" . wp_kses_post($text) . "</div>";
+    }
+    
+    // Plain text fallback (for older quotes)
     $lines = preg_split("/\r\n|\n|\r/", $text);
-    $html = "<ul style='margin:0; padding-left:15px; font-size:12px; line-height:1.6; color:inherit;'>";
-    foreach($lines as $line) if(trim($line) !== '') $html .= "<li>" . esc_html(trim($line)) . "</li>";
+    $html = "<ul style='margin:0; padding-left:18px; font-size:13px; line-height:1.6; color:inherit;'>";
+    foreach($lines as $line) if(trim($line) !== '') $html .= "<li style='margin-bottom:4px;'>" . esc_html(trim($line)) . "</li>";
     $html .= "</ul>";
     return $html;
 }
 
-// Function to safely turn newlines into plain text WhatsApp bullets
-function tcc_text_bullets($text) {
-    if (empty(trim($text))) return "None specified.";
+// Function to safely turn HTML/Newlines into plain text WhatsApp bullets
+function tcc_text_bullets($text, $bullet = "✓") {
+    if (empty(trim(wp_strip_all_tags($text)))) return "None specified.";
+    
+    // If it has HTML tags (from Rich Text Editor), convert cleanly
+    if (strpos($text, '<li') !== false || strpos($text, '<p') !== false || strpos($text, '<div') !== false) {
+        return tcc_html_to_wa($text, $bullet);
+    }
+
+    // Plain text fallback (for older quotes)
     $lines = preg_split("/\r\n|\n|\r/", $text);
     $res = "";
-    foreach($lines as $line) if(trim($line) !== '') $res .= "✓ " . trim($line) . "\n";
+    foreach($lines as $line) if(trim($line) !== '') $res .= $bullet . " " . trim($line) . "\n";
     return trim($res);
-}
-
-// Helper to convert Rich Text HTML to Plain Text for WhatsApp Copying
-function tcc_html_to_wa($html) {
-    if (empty($html)) return "";
-    $text = preg_replace('/<li[^>]*>/i', "• ", $html);
-    $text = preg_replace('/<br\s*\/?>/i', "\n", $text);
-    $text = preg_replace('/<\/p>/i', "\n\n", $text);
-    $text = wp_strip_all_tags($text);
-    $text = html_entity_decode($text, ENT_QUOTES, 'UTF-8');
-    return trim($text);
 }
 
 if(!$quote_data) {
@@ -131,7 +146,7 @@ if(!empty($d['itinerary'])){
         if(trim($t)) {
             $txt_itin .= "*Day ".($idx+1).":* " . trim($t) . "\n";
             if (!empty($d['itinerary_desc'][$idx])) {
-                $txt_itin .= tcc_html_to_wa($d['itinerary_desc'][$idx]) . "\n";
+                $txt_itin .= tcc_html_to_wa($d['itinerary_desc'][$idx], '•') . "\n";
             }
             if (!empty($raw_stays[$idx])) {
                 $txt_itin .= "Night Stay: " . trim($raw_stays[$idx]) . "\n";
@@ -163,9 +178,10 @@ if(!empty($d['stays'])){
     $txt_hotels .= "No hotels selected.\n";
 }
 
-$txt_inc = "*Included in Package*\n" . tcc_text_bullets($d['inclusions']);
-$txt_exc = "*Excluded from Package*\n" . tcc_text_bullets($d['exclusions']);
-$txt_pay = "*Payment Terms*\n" . tcc_text_bullets($d['payment_terms']);
+// Map the HTML inputs to WA text cleanly utilizing specific emojis
+$txt_inc = "*Included in Package*\n" . tcc_text_bullets($d['inclusions'], '✅');
+$txt_exc = "*Excluded from Package*\n" . tcc_text_bullets($d['exclusions'], '❌');
+$txt_pay = "*Payment Terms*\n" . tcc_text_bullets($d['payment_terms'], '💳');
 
 $gst_pct_disp = isset($d['gst_pct']) ? $d['gst_pct'] : 5;
 $pp_gst = isset($quote_data['per_person_with_gst']) ? $quote_data['per_person_with_gst'] : ($grand_total / max(1, $d['pax']));
@@ -261,11 +277,6 @@ if ($is_cancelled) {
     .tcc-timeline-title { font-size: 16px; font-weight: 700; color: var(--tcc-primary); margin: 0 0 12px; }
     .tcc-timeline-image { margin-bottom: 15px; width: 100%; height: auto; max-height: 450px; object-fit: cover; border-radius: 6px; border: 1px solid var(--tcc-border); }
     
-    /* Safely target RTE HTML rendering */
-    .tcc-timeline-paragraph { font-size: 14px; color: var(--tcc-text); margin: 0 0 12px 0; line-height: 1.6; }
-    .tcc-timeline-paragraph ul, .tcc-timeline-paragraph ol { margin: 8px 0; padding-left: 20px; }
-    .tcc-timeline-paragraph p { margin: 0 0 8px 0; }
-    
     .tcc-timeline-stay { font-size: 14px; color: var(--tcc-primary); margin: 0; padding-top: 10px; border-top: 1px dashed var(--tcc-border); font-weight: 600;}
 
     .tcc-price-grid { display: grid; grid-template-columns: 1fr; gap: 20px; background: #f8fafc; padding: 25px; border-radius: var(--tcc-radius); border: 1px solid var(--tcc-border); margin-bottom: 30px; }
@@ -285,6 +296,12 @@ if ($is_cancelled) {
     .tcc-inc-red h4 { color: #b91c1c; }
     .tcc-inc-yellow { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
     .tcc-inc-yellow h4 { color: #b45309; }
+    
+    /* RTE Dynamic Content Styling */
+    .tcc-rte-display ul, .tcc-rte-display ol { margin: 5px 0 10px; padding-left: 20px; }
+    .tcc-rte-display li { margin-bottom: 5px; }
+    .tcc-rte-display p { margin: 0 0 10px 0; }
+    .tcc-rte-display p:last-child { margin-bottom: 0; }
 
     .tcc-container .WA-copy-feedback { pointer-events: none; position: fixed; top: 10px; left: 50%; transform: translateX(-50%) translateY(-20px); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 20px; border-radius: 20px; font-size: 12px; font-weight: bold; opacity: 0; transition: 0.3s; z-index: 999; }
     .tcc-container .WA-copy-feedback.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -365,7 +382,7 @@ if ($is_cancelled) {
                         <?php endif; ?>
 
                         <?php if (!empty($d['itinerary_desc'][$index])): ?>
-                            <div class="tcc-timeline-paragraph"><?php echo wp_kses_post($d['itinerary_desc'][$index]); ?></div>
+                            <div class="tcc-rte-display"><?php echo wp_kses_post($d['itinerary_desc'][$index]); ?></div>
                         <?php endif; ?>
 
                         <?php if (!empty($raw_stays[$index])): ?>
@@ -618,7 +635,7 @@ if ($is_cancelled) {
                     <?php endif; ?>
                     
                     <?php if (!empty($d['itinerary_desc'][$index])): ?>
-                        <div style="font-size: 13px; color: #334155; margin-bottom: 12px; line-height: 1.6;">
+                        <div class="tcc-rte-display" style="font-size: 13px; color: #334155; margin-bottom: 12px; line-height: 1.6;">
                             <?php echo wp_kses_post($d['itinerary_desc'][$index]); ?>
                         </div>
                     <?php endif; ?>
@@ -837,7 +854,6 @@ function tccDownloadPDF(btn) {
                     color: #333; 
                     margin: 0 auto;
                     max-width: 800px;
-                    padding: 20px;
                     background: #fff;
                 }
                 
@@ -862,22 +878,30 @@ function tccDownloadPDF(btn) {
                 }
                 
                 /* CRITICAL: This tells the native browser NEVER to slice tables or headings in half */
-                .pdf-avoid-break, tr, h3, td { 
+                .pdf-avoid-break, tr, th, td, h3, img { 
                     page-break-inside: avoid !important; 
                     break-inside: avoid !important; 
                 }
+                img {
+                    max-width: 100% !important;
+                }
                 
+                /* RTE Dynamic Content Styling */
+                .tcc-rte-display ul, .tcc-rte-display ol { margin: 5px 0 10px; padding-left: 20px; }
+                .tcc-rte-display li { margin-bottom: 5px; }
+                .tcc-rte-display p { margin: 0 0 10px 0; }
+                .tcc-rte-display p:last-child { margin-bottom: 0; }
+
                 /* Print-specific layout rules */
                 @media print {
-                    body { 
-                        padding: 0; 
-                        max-width: 100%; 
-                        margin: 0;
-                    }
-                    /* Sets a clean 15mm margin on the PDF pages */
                     @page { 
-                        margin: 15mm; 
+                        margin: 0 !important; /* Hides about:blank and default headers/footers in Chrome */
                         size: A4 portrait;
+                    }
+                    body { 
+                        padding: 15mm !important; /* Safely pushes the content away from the paper edge */
+                        max-width: 100% !important; 
+                        margin: 0 !important;
                     }
                 }
             </style>
@@ -891,11 +915,12 @@ function tccDownloadPDF(btn) {
     printWindow.document.close();
     printWindow.focus();
     
-    // Give the browser half a second to render the HTML, then trigger the print dialog
+    // Give the browser time to render HTML and load images, then trigger the print dialog
     setTimeout(() => {
         printWindow.print();
         btn.innerText = oldText;
-    }, 500);
+        printWindow.close();
+    }, 800);
 }
 </script>
 

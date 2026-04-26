@@ -37,6 +37,7 @@ add_action( 'wp_ajax_tcc_add_payment', 'tcc_add_payment' );
 add_action( 'wp_ajax_tcc_delete_payment', 'tcc_delete_payment' );
 
 add_action( 'wp_ajax_tcc_delete_quote', 'tcc_delete_quote' );
+add_action( 'wp_ajax_tcc_duplicate_quote', 'tcc_duplicate_quote' ); // NEW DUPLICATE ACTION
 add_action( 'wp_ajax_tcc_update_quote_client', 'tcc_update_quote_client' );
 add_action( 'wp_ajax_tcc_get_full_quote_data', 'tcc_get_full_quote_data' );
 
@@ -228,14 +229,29 @@ function tcc_calculate_trip() {
 
     $master_data = get_option('tcc_master_settings', array());
     
+    // Tiered & Flat Profit Setup
     $profit_per_person = 0;
-    if(isset($master_data[$destination]) && isset($master_data[$destination]['profit_per_person'])) {
-        $profit_per_person = floatval($master_data[$destination]['profit_per_person']);
+    $profit_type = 'flat';
+    $profit_tiers = [];
+    
+    if(isset($master_data[$destination])) {
+        if(isset($master_data[$destination]['profit_per_person'])) {
+            $profit_per_person = floatval($master_data[$destination]['profit_per_person']);
+        }
+        if(isset($master_data[$destination]['profit_type'])) {
+            $profit_type = $master_data[$destination]['profit_type'];
+        }
+        if(isset($master_data[$destination]['profit_tiers'])) {
+            $profit_tiers = $master_data[$destination]['profit_tiers'];
+        }
     }
 
-    $dest_inclusions = isset($master_data[$destination]['inclusions']) ? $master_data[$destination]['inclusions'] : '';
-    $dest_exclusions = isset($master_data[$destination]['exclusions']) ? $master_data[$destination]['exclusions'] : '';
-    $dest_payment_terms = isset($master_data[$destination]['payment_terms']) ? $master_data[$destination]['payment_terms'] : '';
+    // CAPTURE EDITABLE QUOTE TERMS FROM FORM (Fallback to Master Data)
+    $dest_inclusions = isset($_POST['quote_inclusions']) && !empty($_POST['quote_inclusions']) ? wp_kses_post(wp_unslash($_POST['quote_inclusions'])) : (isset($master_data[$destination]['inclusions']) ? $master_data[$destination]['inclusions'] : '');
+    
+    $dest_exclusions = isset($_POST['quote_exclusions']) && !empty($_POST['quote_exclusions']) ? wp_kses_post(wp_unslash($_POST['quote_exclusions'])) : (isset($master_data[$destination]['exclusions']) ? $master_data[$destination]['exclusions'] : '');
+    
+    $dest_payment_terms = isset($_POST['quote_payment_terms']) && !empty($_POST['quote_payment_terms']) ? wp_kses_post(wp_unslash($_POST['quote_payment_terms'])) : (isset($master_data[$destination]['payment_terms']) ? $master_data[$destination]['payment_terms'] : '');
 
     $surcharge_percent = 0;
     $surcharge_date = !empty($start_date) ? $start_date : date('Y-m-d'); 
@@ -261,7 +277,8 @@ function tcc_calculate_trip() {
         $first_row_pickup = $pickup_loc;
         
         foreach ( $transports as $index => $veh ) {
-            $qty = intval($trans_qtys[$index]);
+            $qty = isset($trans_qtys[$index]) ? intval($trans_qtys[$index]) : 1;
+            if ($qty <= 0) $qty = 1;
             $vehicle = trim(sanitize_text_field($veh));
             $t_days = isset($trans_days[$index]) && intval($trans_days[$index]) > 0 ? intval($trans_days[$index]) : $total_days;
             $row_pickup = isset($trans_pickups[$index]) && !empty($trans_pickups[$index]) ? trim(sanitize_text_field($trans_pickups[$index])) : $pickup_loc;
@@ -399,10 +416,12 @@ function tcc_calculate_trip() {
     }
 
     if (!empty($valid_addons)) {
-        if (!empty(trim($dest_inclusions))) {
-            $dest_inclusions .= "\n";
+        $addon_bullets = "<ul>";
+        foreach($valid_addons as $va) {
+            $addon_bullets .= "<li>" . esc_html($va) . "</li>";
         }
-        $dest_inclusions .= implode("\n", $valid_addons);
+        $addon_bullets .= "</ul>";
+        $dest_inclusions .= $addon_bullets;
     }
 
     if (!empty($error_messages)) { wp_send_json_error(array('errors' => implode(" <br> ", $error_messages))); wp_die(); }
@@ -429,13 +448,32 @@ function tcc_calculate_trip() {
         if ($override_profit !== false) {
             $target_net_profit = $override_profit; 
             $denominator = 1 - ($M * $pt_rate) - ($M * $pg_rate);
+            if ($denominator <= 0) $denominator = 0.01; 
+            $initial_base_price = ($target_net_profit + $actual_cost) / $denominator;
         } else {
-            $target_net_profit = $profit_per_person * $total_pax; 
-            $denominator = 1 - ($M * $pt_rate) - ($M * $pg_rate);
+            if ($profit_type === 'percent') {
+                $matched_percent = 0;
+                foreach($profit_tiers as $tier) {
+                    if ($total_pax >= $tier['min'] && $total_pax <= $tier['max']) {
+                        $matched_percent = $tier['percent'];
+                        break;
+                    }
+                }
+                $profit_margin = $matched_percent / 100;
+                
+                // Calculate Profit ON Total Actual Cost
+                $target_net_profit = $actual_cost * $profit_margin;
+                
+                $denominator = 1 - ($M * $pt_rate) - ($M * $pg_rate);
+                if ($denominator <= 0) $denominator = 0.01; 
+                $initial_base_price = ($target_net_profit + $actual_cost) / $denominator;
+            } else {
+                $target_net_profit = $profit_per_person * $total_pax; 
+                $denominator = 1 - ($M * $pt_rate) - ($M * $pg_rate);
+                if ($denominator <= 0) $denominator = 0.01; 
+                $initial_base_price = ($target_net_profit + $actual_cost) / $denominator;
+            }
         }
-        
-        if ($denominator <= 0) $denominator = 0.01; 
-        $initial_base_price = ($target_net_profit + $actual_cost) / $denominator;
     }
 
     $d1_amt  = ($d1_type === 'flat') ? $d1_val : (($d1_type === 'percent') ? ($initial_base_price * ($d1_val / 100)) : 0);
@@ -445,7 +483,9 @@ function tcc_calculate_trip() {
     $discounted_base_price = max(0, $initial_base_price - $total_discount_amount);
     
     $exact_grand_total = $discounted_base_price * $M;
-    $grand_total = ceil($exact_grand_total); 
+    
+    // Automatically Round Up to nearest 100
+    $grand_total = ceil($exact_grand_total / 100) * 100; 
     
     $discounted_base_price = $grand_total / $M;
     $gst = $grand_total - $discounted_base_price;
@@ -531,6 +571,9 @@ function tcc_calculate_trip() {
         'd2_val' => $d2_val,
         'pickup_custom' => $pickup_custom,
         'drop_custom' => $drop_custom,
+        'quote_inclusions' => isset($_POST['quote_inclusions']) ? wp_unslash($_POST['quote_inclusions']) : '',
+        'quote_exclusions' => isset($_POST['quote_exclusions']) ? wp_unslash($_POST['quote_exclusions']) : '',
+        'quote_payment_terms' => isset($_POST['quote_payment_terms']) ? wp_unslash($_POST['quote_payment_terms']) : '',
         'itinerary_desc' => is_array($day_itinerary_desc) ? array_map('wp_kses_post', $day_itinerary_desc) : array(),
         'itinerary_image' => is_array($day_itinerary_image) ? $day_itinerary_image : array(),
         'itinerary_stay_place' => is_array($day_itinerary_stays) ? $day_itinerary_stays : array(),
@@ -581,6 +624,45 @@ function tcc_calculate_trip() {
         'grand_total' => round($grand_total, 2),
         'summary_data'=> $summary_data,
         'permalink'   => $permalink
+    ));
+}
+
+// NEW FUNCTION: Duplicate Quote Action
+function tcc_duplicate_quote() {
+    if ( ! is_user_logged_in() ) wp_die();
+    $quote_id = intval($_POST['quote_id']);
+    if(!$quote_id) wp_send_json_error('Invalid Quote ID');
+
+    $post = get_post($quote_id);
+    if(!$post) wp_send_json_error('Quote not found');
+
+    $data = json_decode($post->post_content, true);
+    
+    // Generate a fresh random string for the permalink
+    $random_string = wp_generate_password(8, false); 
+    $client_name = isset($data['summary']['client_name']) ? $data['summary']['client_name'] : '';
+    $dest = isset($data['summary']['destination']) ? $data['summary']['destination'] : '';
+    
+    $post_title = !empty($client_name) ? "{$client_name} - {$dest} (" . strtoupper($random_string) . ")" : 'Quote ' . strtoupper($random_string);
+
+    $new_post_id = wp_insert_post(array(
+        'post_type' => 'tcc_quote',
+        'post_name' => $random_string,
+        'post_title' => $post_title,
+        'post_content' => wp_slash( $post->post_content ), // Directly clone the identical JSON content
+        'post_status' => 'publish'
+    ));
+
+    if(is_wp_error($new_post_id)) {
+        wp_send_json_error('Failed to duplicate.');
+    }
+
+    // Notice we DO NOT copy over post_meta for "tcc_payments" or "tcc_lead_status".
+    // This correctly makes the duplicate an empty slate waiting to be turned into a new option!
+
+    wp_send_json_success(array(
+        'new_id' => $new_post_id,
+        'message' => 'Quote Option Duplicated successfully! It has now been loaded into the Calculator.'
     ));
 }
 
@@ -746,15 +828,31 @@ function tcc_delete_transport_rate() {
 function tcc_save_master_settings() {
     if ( ! is_user_logged_in() ) wp_die();
     $dest_name = trim(sanitize_text_field($_POST['master_dest_name']));
+    $profit_type = isset($_POST['master_profit_type']) ? sanitize_text_field($_POST['master_profit_type']) : 'flat';
     $profit = floatval($_POST['master_profit']);
+    
+    $tier_mins = isset($_POST['tier_min_pax']) ? $_POST['tier_min_pax'] : [];
+    $tier_maxs = isset($_POST['tier_max_pax']) ? $_POST['tier_max_pax'] : [];
+    $tier_percents = isset($_POST['tier_percent']) ? $_POST['tier_percent'] : [];
+    $profit_tiers = [];
+    for($i=0; $i<count($tier_mins); $i++) {
+        if(!empty($tier_mins[$i]) && !empty($tier_maxs[$i])) {
+            $profit_tiers[] = array(
+                'min' => intval($tier_mins[$i]),
+                'max' => intval($tier_maxs[$i]),
+                'percent' => floatval($tier_percents[$i])
+            );
+        }
+    }
+
     $pickups = explode(',', sanitize_text_field($_POST['master_pickups']));
     $stays = explode(',', sanitize_text_field($_POST['master_stays']));
     $vehicles = explode(',', sanitize_text_field($_POST['master_vehicles']));
     $cats = explode(',', sanitize_text_field($_POST['master_hotel_cats']));
 
-    $inclusions = sanitize_textarea_field(wp_unslash($_POST['master_inclusions']));
-    $exclusions = sanitize_textarea_field(wp_unslash($_POST['master_exclusions']));
-    $payment_terms = sanitize_textarea_field(wp_unslash($_POST['master_payment_terms']));
+    $inclusions = wp_kses_post(wp_unslash($_POST['master_inclusions']));
+    $exclusions = wp_kses_post(wp_unslash($_POST['master_exclusions']));
+    $payment_terms = wp_kses_post(wp_unslash($_POST['master_payment_terms']));
 
     $season_starts = isset($_POST['season_start']) ? $_POST['season_start'] : [];
     $season_ends   = isset($_POST['season_end']) ? $_POST['season_end'] : [];
@@ -772,7 +870,9 @@ function tcc_save_master_settings() {
 
     $master_data = get_option('tcc_master_settings', array());
     $master_data[$dest_name] = array(
+        'profit_type' => $profit_type,
         'profit_per_person' => $profit,
+        'profit_tiers' => $profit_tiers,
         'pickups' => array_map('trim', $pickups),
         'stay_places' => array_map('trim', $stays),
         'vehicles' => array_map('trim', $vehicles),

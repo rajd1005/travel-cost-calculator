@@ -9,7 +9,9 @@ function tcc_get_safe_master_data() {
     if (empty($master_data) || !is_array($master_data)) {
         $master_data = array(
             'Kashmir' => array(
+                'profit_type' => 'flat',
                 'profit_per_person' => 0,
+                'profit_tiers' => array(),
                 'pickups' => array('Srinagar', 'Jammu'),
                 'stay_places' => array('Srinagar', 'Gulmarg', 'Pahalgam'),
                 'vehicles' => array('Innova', 'Tempo Traveler'),
@@ -254,6 +256,61 @@ function tcc_render_calculator_form() {
                     </div>
                 </div>
 
+                <div class="tcc-card">
+                    <div class="tcc-card-title tcc-step-accordion-header" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; margin-bottom:0;">
+                        <span>6. Terms & Policies (Editable for Quote)</span>
+                        <span class="tcc-acc-icon" style="color:#b93b59; font-size:12px;">▼</span>
+                    </div>
+                    <div class="tcc-step-accordion-body" style="display:none; margin-top:10px; border-top:1px dashed #e2e8f0; padding-top:10px;">
+                        
+                        <div class="tcc-form-group">
+                            <label>Inclusions</label>
+                            <div class="tcc-rte-container" style="border:1px solid #cbd5e1; border-radius:4px; background:#fff; overflow:hidden;">
+                                <div class="tcc-rte-toolbar" style="background:#f1f5f9; padding:6px; border-bottom:1px solid #cbd5e1; display:flex; gap:6px; flex-wrap:wrap;">
+                                    <button type="button" class="tcc-rte-btn" data-cmd="bold" style="font-weight:bold; cursor:pointer;" title="Bold">B</button>
+                                    <button type="button" class="tcc-rte-btn" data-cmd="italic" style="font-style:italic; cursor:pointer;" title="Italic">I</button>
+                                    <button type="button" class="tcc-rte-btn" data-cmd="underline" style="text-decoration:underline; cursor:pointer;" title="Underline">U</button>
+                                    <div style="width:1px; background:#cbd5e1; margin:0 4px;"></div>
+                                    <button type="button" class="tcc-rte-btn" data-cmd="insertUnorderedList" style="cursor:pointer;" title="Bullet List">• Bullets</button>
+                                </div>
+                                <div class="tcc-rte-editor" id="quote_inclusions_editor" contenteditable="true" style="padding:12px; min-height:80px; font-size:13px; outline:none; line-height:1.6; color:#334155;"></div>
+                                <textarea name="quote_inclusions" id="quote_inclusions" style="display:none;"></textarea>
+                            </div>
+                        </div>
+
+                        <div class="tcc-form-group" style="margin-top:10px;">
+                            <label>Exclusions</label>
+                            <div class="tcc-rte-container" style="border:1px solid #cbd5e1; border-radius:4px; background:#fff; overflow:hidden;">
+                                <div class="tcc-rte-toolbar" style="background:#f1f5f9; padding:6px; border-bottom:1px solid #cbd5e1; display:flex; gap:6px; flex-wrap:wrap;">
+                                    <button type="button" class="tcc-rte-btn" data-cmd="bold" style="font-weight:bold; cursor:pointer;" title="Bold">B</button>
+                                    <button type="button" class="tcc-rte-btn" data-cmd="italic" style="font-style:italic; cursor:pointer;" title="Italic">I</button>
+                                    <button type="button" class="tcc-rte-btn" data-cmd="underline" style="text-decoration:underline; cursor:pointer;" title="Underline">U</button>
+                                    <div style="width:1px; background:#cbd5e1; margin:0 4px;"></div>
+                                    <button type="button" class="tcc-rte-btn" data-cmd="insertUnorderedList" style="cursor:pointer;" title="Bullet List">• Bullets</button>
+                                </div>
+                                <div class="tcc-rte-editor" id="quote_exclusions_editor" contenteditable="true" style="padding:12px; min-height:80px; font-size:13px; outline:none; line-height:1.6; color:#334155;"></div>
+                                <textarea name="quote_exclusions" id="quote_exclusions" style="display:none;"></textarea>
+                            </div>
+                        </div>
+
+                        <div class="tcc-form-group" style="margin-top:10px;">
+                            <label>Payment Terms</label>
+                            <div class="tcc-rte-container" style="border:1px solid #cbd5e1; border-radius:4px; background:#fff; overflow:hidden;">
+                                <div class="tcc-rte-toolbar" style="background:#f1f5f9; padding:6px; border-bottom:1px solid #cbd5e1; display:flex; gap:6px; flex-wrap:wrap;">
+                                    <button type="button" class="tcc-rte-btn" data-cmd="bold" style="font-weight:bold; cursor:pointer;" title="Bold">B</button>
+                                    <button type="button" class="tcc-rte-btn" data-cmd="italic" style="font-style:italic; cursor:pointer;" title="Italic">I</button>
+                                    <button type="button" class="tcc-rte-btn" data-cmd="underline" style="text-decoration:underline; cursor:pointer;" title="Underline">U</button>
+                                    <div style="width:1px; background:#cbd5e1; margin:0 4px;"></div>
+                                    <button type="button" class="tcc-rte-btn" data-cmd="insertUnorderedList" style="cursor:pointer;" title="Bullet List">• Bullets</button>
+                                </div>
+                                <div class="tcc-rte-editor" id="quote_payment_terms_editor" contenteditable="true" style="padding:12px; min-height:80px; font-size:13px; outline:none; line-height:1.6; color:#334155;"></div>
+                                <textarea name="quote_payment_terms" id="quote_payment_terms" style="display:none;"></textarea>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
             </div>
 
             <div class="tcc-step-nav">
@@ -460,31 +517,83 @@ function tcc_render_settings_dashboard() {
             <div class="tcc-accordion-header">2. Destination Setup <span>&#9660;</span></div>
             <div class="tcc-accordion-body">
                 <form id="tcc-master-settings-form">
-                    <div class="tcc-form-group">
-                        <label>Select / Add Destination</label>
-                        <select id="master_dest_select" style="margin-bottom:5px;">
-                            <option value="">-- Add New --</option>
-                            <?php foreach($destinations as $dest): ?><option value="<?php echo esc_attr($dest); ?>"><?php echo esc_html($dest); ?></option><?php endforeach; ?>
-                        </select>
-                        <input type="text" name="master_dest_name" id="master_dest_name" placeholder="Destination Name" required>
+                    <div class="tcc-grid-2">
+                        <div class="tcc-form-group">
+                            <label>Select / Add Destination</label>
+                            <select id="master_dest_select" style="margin-bottom:5px;">
+                                <option value="">-- Add New --</option>
+                                <?php foreach($destinations as $dest): ?><option value="<?php echo esc_attr($dest); ?>"><?php echo esc_html($dest); ?></option><?php endforeach; ?>
+                            </select>
+                            <input type="text" name="master_dest_name" id="master_dest_name" placeholder="Destination Name" required>
+                        </div>
+                        
+                        <div class="tcc-form-group">
+                            <label>Profit Setup</label>
+                            <select name="master_profit_type" id="master_profit_type" style="margin-bottom:5px;">
+                                <option value="flat">Flat Profit PP (₹)</option>
+                                <option value="percent">Tiered Percentage (%)</option>
+                            </select>
+                            
+                            <div id="master_profit_flat_wrapper">
+                                <input type="number" name="master_profit" id="master_profit" step="0.01" value="0" placeholder="Def. Profit PP (₹)">
+                            </div>
+                            
+                            <div id="master_profit_tier_wrapper" style="display:none; margin-top:5px; padding:8px; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:4px;">
+                                <label style="font-size:11px; margin-bottom:5px; display:block;">Tiered Profit (%) based on Adults</label>
+                                <div id="profit-tiers-wrapper"></div>
+                                <button type="button" id="add_profit_tier_btn" class="tcc-btn-secondary" style="padding:2px 8px; font-size:11px; margin-top:5px;">+ Add Tier</button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="tcc-form-group"><label>Def. Profit PP (₹)</label><input type="number" name="master_profit" id="master_profit" step="0.01" value="0"></div>
+                    
                     <div class="tcc-form-group"><label>Pickups (Comma Sep)</label><input type="text" name="master_pickups" id="master_pickups" required></div>
                     <div class="tcc-form-group"><label>Stay Places (Comma Sep)</label><input type="text" name="master_stays" id="master_stays" required></div>
                     <div class="tcc-form-group"><label>Vehicles (Comma Sep)</label><input type="text" name="master_vehicles" id="master_vehicles" required></div>
                     <div class="tcc-form-group"><label>Hotel Categories (Comma Sep)</label><input type="text" name="master_hotel_cats" id="master_hotel_cats" required></div>
                     
                     <div class="tcc-form-group" style="margin-top:10px;">
-                        <label>Inclusions (One per line)</label>
-                        <textarea name="master_inclusions" id="master_inclusions" rows="3" style="width:100%; border:1px solid #ccc; border-radius:3px; padding:6px; font-size:12px;"></textarea>
+                        <label>Inclusions</label>
+                        <div class="tcc-rte-container" style="border:1px solid #cbd5e1; border-radius:4px; background:#fff; overflow:hidden;">
+                            <div class="tcc-rte-toolbar" style="background:#f1f5f9; padding:6px; border-bottom:1px solid #cbd5e1; display:flex; gap:6px; flex-wrap:wrap;">
+                                <button type="button" class="tcc-rte-btn" data-cmd="bold" style="font-weight:bold; cursor:pointer;" title="Bold">B</button>
+                                <button type="button" class="tcc-rte-btn" data-cmd="italic" style="font-style:italic; cursor:pointer;" title="Italic">I</button>
+                                <button type="button" class="tcc-rte-btn" data-cmd="underline" style="text-decoration:underline; cursor:pointer;" title="Underline">U</button>
+                                <div style="width:1px; background:#cbd5e1; margin:0 4px;"></div>
+                                <button type="button" class="tcc-rte-btn" data-cmd="insertUnorderedList" style="cursor:pointer;" title="Bullet List">• Bullets</button>
+                            </div>
+                            <div class="tcc-rte-editor" id="master_inclusions_editor" contenteditable="true" style="padding:12px; min-height:80px; font-size:13px; outline:none; line-height:1.6; color:#334155;"></div>
+                            <textarea name="master_inclusions" id="master_inclusions" style="display:none;"></textarea>
+                        </div>
                     </div>
-                    <div class="tcc-form-group" style="margin-top:5px;">
-                        <label>Exclusions (One per line)</label>
-                        <textarea name="master_exclusions" id="master_exclusions" rows="3" style="width:100%; border:1px solid #ccc; border-radius:3px; padding:6px; font-size:12px;"></textarea>
+
+                    <div class="tcc-form-group" style="margin-top:10px;">
+                        <label>Exclusions</label>
+                        <div class="tcc-rte-container" style="border:1px solid #cbd5e1; border-radius:4px; background:#fff; overflow:hidden;">
+                            <div class="tcc-rte-toolbar" style="background:#f1f5f9; padding:6px; border-bottom:1px solid #cbd5e1; display:flex; gap:6px; flex-wrap:wrap;">
+                                <button type="button" class="tcc-rte-btn" data-cmd="bold" style="font-weight:bold; cursor:pointer;" title="Bold">B</button>
+                                <button type="button" class="tcc-rte-btn" data-cmd="italic" style="font-style:italic; cursor:pointer;" title="Italic">I</button>
+                                <button type="button" class="tcc-rte-btn" data-cmd="underline" style="text-decoration:underline; cursor:pointer;" title="Underline">U</button>
+                                <div style="width:1px; background:#cbd5e1; margin:0 4px;"></div>
+                                <button type="button" class="tcc-rte-btn" data-cmd="insertUnorderedList" style="cursor:pointer;" title="Bullet List">• Bullets</button>
+                            </div>
+                            <div class="tcc-rte-editor" id="master_exclusions_editor" contenteditable="true" style="padding:12px; min-height:80px; font-size:13px; outline:none; line-height:1.6; color:#334155;"></div>
+                            <textarea name="master_exclusions" id="master_exclusions" style="display:none;"></textarea>
+                        </div>
                     </div>
-                    <div class="tcc-form-group" style="margin-top:5px;">
-                        <label>Payment Terms (One per line)</label>
-                        <textarea name="master_payment_terms" id="master_payment_terms" rows="3" style="width:100%; border:1px solid #ccc; border-radius:3px; padding:6px; font-size:12px;"></textarea>
+
+                    <div class="tcc-form-group" style="margin-top:10px;">
+                        <label>Payment Terms</label>
+                        <div class="tcc-rte-container" style="border:1px solid #cbd5e1; border-radius:4px; background:#fff; overflow:hidden;">
+                            <div class="tcc-rte-toolbar" style="background:#f1f5f9; padding:6px; border-bottom:1px solid #cbd5e1; display:flex; gap:6px; flex-wrap:wrap;">
+                                <button type="button" class="tcc-rte-btn" data-cmd="bold" style="font-weight:bold; cursor:pointer;" title="Bold">B</button>
+                                <button type="button" class="tcc-rte-btn" data-cmd="italic" style="font-style:italic; cursor:pointer;" title="Italic">I</button>
+                                <button type="button" class="tcc-rte-btn" data-cmd="underline" style="text-decoration:underline; cursor:pointer;" title="Underline">U</button>
+                                <div style="width:1px; background:#cbd5e1; margin:0 4px;"></div>
+                                <button type="button" class="tcc-rte-btn" data-cmd="insertUnorderedList" style="cursor:pointer;" title="Bullet List">• Bullets</button>
+                            </div>
+                            <div class="tcc-rte-editor" id="master_payment_terms_editor" contenteditable="true" style="padding:12px; min-height:80px; font-size:13px; outline:none; line-height:1.6; color:#334155;"></div>
+                            <textarea name="master_payment_terms" id="master_payment_terms" style="display:none;"></textarea>
+                        </div>
                     </div>
 
                     <div class="tcc-form-group" style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
@@ -584,6 +693,7 @@ function tcc_render_settings_dashboard() {
                 <div id="pmt_quote_actions" style="display:none; gap:10px; margin-bottom:15px; flex-wrap:wrap;">
                     <button type="button" id="pmt_view_quote_btn" class="tcc-btn-secondary" style="margin:0; flex:1; min-width:90px; background:#f0f9ff; color:#0284c7; border-color:#bae6fd;">👁️ View</button>
                     <button type="button" id="pmt_copy_quote_btn" class="tcc-btn-secondary" style="margin:0; flex:1; min-width:90px; background:#f0fdf4; color:#16a34a; border-color:#bbf7d0;">📋 Link</button>
+                    <button type="button" id="pmt_duplicate_quote_btn" class="tcc-btn-secondary" style="margin:0; flex:1; min-width:110px; background:#f3e8ff; color:#6b21a8; border-color:#d8b4fe;">📄 Duplicate</button>
                     <button type="button" id="pmt_edit_quote_btn" class="tcc-btn-secondary" style="margin:0; flex:1; min-width:110px;">✏️ Client Info</button>
                     <button type="button" id="pmt_full_edit_btn" class="tcc-btn-secondary" style="margin:0; flex:1; min-width:110px; background:#fffbeb; color:#b45309; border-color:#fde68a;">🛠️ Full Edit</button>
                     <button type="button" id="pmt_delete_quote_btn" class="tcc-btn-del" style="margin:0; flex:1; min-width:90px; background:#fee2e2; color:#dc2626; border-color:#f87171;">🗑️ Delete</button>

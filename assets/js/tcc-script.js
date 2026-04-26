@@ -114,6 +114,26 @@ jQuery(document).ready(function($) {
         if(m_dest && dests.includes(m_dest)) $md.val(m_dest);
     }
 
+    function updateQuoteTerms() {
+        let isEditing = $('#edit_quote_id').val();
+        if(isEditing) return; 
+        
+        let dest = $('#calc_destination').val();
+        if(typeof tccMasterData !== 'undefined' && tccMasterData[dest]) {
+            $('#quote_inclusions_editor').html(tccMasterData[dest].inclusions || '');
+            $('#quote_inclusions').val(tccMasterData[dest].inclusions || '');
+
+            $('#quote_exclusions_editor').html(tccMasterData[dest].exclusions || '');
+            $('#quote_exclusions').val(tccMasterData[dest].exclusions || '');
+
+            $('#quote_payment_terms_editor').html(tccMasterData[dest].payment_terms || '');
+            $('#quote_payment_terms').val(tccMasterData[dest].payment_terms || '');
+        } else {
+            $('#quote_inclusions_editor, #quote_exclusions_editor, #quote_payment_terms_editor').html('');
+            $('#quote_inclusions, #quote_exclusions, #quote_payment_terms').val('');
+        }
+    }
+
     function updateCalculatorDropdowns() {
         let dest = $('#calc_destination').val();
         if(typeof tccMasterData !== 'undefined' && tccMasterData[dest]) {
@@ -225,8 +245,10 @@ jQuery(document).ready(function($) {
         triggerLiveCalculation(); 
     });
 
-    function addTransportRow(vehicleName = '', qty = '', tDays = null, pickupName = '', customRate = '', customTotal = '') {
+    function addTransportRow(vehicleName = '', qty = '1', tDays = null, pickupName = '', customRate = '', customTotal = '') {
         if (tDays === null) tDays = $('#total_days').val() || 1;
+        if (qty === '' || qty === null) qty = '1';
+
         let safeCustomRate = (customRate !== null && customRate !== undefined) ? customRate : '';
         let safeCustomTotal = (customTotal !== null && customTotal !== undefined) ? customTotal : '';
         
@@ -562,7 +584,7 @@ jQuery(document).ready(function($) {
 
     // RTE Sync Logic (Debounced to avoid lag)
     $(document).on('input blur', '.tcc-rte-editor', function() {
-        $(this).siblings('.tcc-day-desc').val($(this).html());
+        $(this).siblings('textarea').val($(this).html());
     });
 
     $(document).on('click', '.tcc-rte-btn', function(e) {
@@ -578,7 +600,7 @@ jQuery(document).ready(function($) {
     function triggerLiveCalculation() {
         // Sync all RTEs right before any calculation
         $('.tcc-rte-editor').each(function() {
-            $(this).siblings('.tcc-day-desc').val($(this).html());
+            $(this).siblings('textarea').val($(this).html());
         });
 
         $('#live_error').hide();
@@ -693,7 +715,7 @@ jQuery(document).ready(function($) {
         
         // Final sync of RTEs before generate
         $('.tcc-rte-editor').each(function() {
-            $(this).siblings('.tcc-day-desc').val($(this).html());
+            $(this).siblings('textarea').val($(this).html());
         });
 
         let btn = $('#tcc_calculate_btn');
@@ -743,17 +765,25 @@ jQuery(document).ready(function($) {
         setTimeout(function() { $btn.text(originalText); }, 2000);
     }
 
+    // Safely transforms HTML from the RTE into plain text for WhatsApp
+    function stripHtmlToWA(html, bullet = "•") {
+        if(!html) return "";
+        let text = html.replace(/<br\s*[\/]?>/gi, "\n");
+        text = text.replace(/<\/p>/gi, "\n\n");
+        text = text.replace(/<li[^>]*>/gi, "\n" + bullet + " ");
+        let tmp = document.createElement("DIV");
+        tmp.innerHTML = text;
+        text = tmp.textContent || tmp.innerText || "";
+        text = text.replace(/\n{3,}/g, "\n\n");
+        return text.trim();
+    }
+
     function formatBullets(text, bullet) {
         if(!text) return "None specified.";
+        if (text.indexOf('<li') !== -1 || text.indexOf('<p') !== -1 || text.indexOf('<div') !== -1 || text.indexOf('<br') !== -1) {
+            return stripHtmlToWA(text, bullet);
+        }
         return text.split(/\r\n|\n|\r/).filter(line => line.trim() !== '').map(line => `${bullet} ${line.trim()}`).join('\n');
-    }
-    
-    // Safely transforms HTML from the RTE into plain text for WhatsApp
-    function stripHtmlToWA(html) {
-        if(!html) return "";
-        let tmp = document.createElement("DIV");
-        tmp.innerHTML = html.replace(/<li>/gi, "• ").replace(/<br\s*[\/]?>/gi, "\n").replace(/<\/p>/gi, "\n\n").replace(/&nbsp;/g, " ");
-        return tmp.textContent.trim() || tmp.innerText.trim() || "";
     }
 
     function buildHotelsText(stays) {
@@ -784,8 +814,6 @@ jQuery(document).ready(function($) {
 
     // GATHER DATA IF UNCALCULATED
     function getCopyDataUncalculated() {
-        if (window.tccLiveSummaryData) return window.tccLiveSummaryData;
-
         let dest = $('#calc_destination').val();
         let master = (typeof tccMasterData !== 'undefined' && tccMasterData[dest]) ? tccMasterData[dest] : {};
 
@@ -820,21 +848,32 @@ jQuery(document).ready(function($) {
             }
         });
 
-        let inclusions = master.inclusions || '';
+        let inclusions = $('#quote_inclusions_editor').html();
+        if (inclusions === undefined) inclusions = master.inclusions || '';
+
+        let exclusions = $('#quote_exclusions_editor').html();
+        if (exclusions === undefined) exclusions = master.exclusions || '';
+
+        let payment_terms = $('#quote_payment_terms_editor').html();
+        if (payment_terms === undefined) payment_terms = master.payment_terms || '';
+
         let addonsText = [];
         $('#addons-wrapper .addon-row').each(function() {
             let name = $(this).find('.addon-name').val();
             if(name && name.trim() !== '') addonsText.push(name.trim());
         });
+        
         if(addonsText.length > 0) {
-            if (inclusions !== '') inclusions += '\n';
-            inclusions += addonsText.join('\n');
+            let addonsHtml = '<ul>';
+            addonsText.forEach(a => addonsHtml += '<li>' + a + '</li>');
+            addonsHtml += '</ul>';
+            inclusions += addonsHtml;
         }
 
         return {
             inclusions: inclusions,
-            exclusions: master.exclusions || '',
-            payment_terms: master.payment_terms || '',
+            exclusions: exclusions,
+            payment_terms: payment_terms,
             itinerary: itinerary,
             itinerary_stay_places: itinerary_stay_places,
             itinerary_desc: itinerary_desc,
@@ -871,7 +910,7 @@ jQuery(document).ready(function($) {
         d.itinerary.forEach((day_text, idx) => {
             msg += `👉Day ${idx + 1}: ${day_text}\n`;
             if (d.itinerary_desc && d.itinerary_desc[idx]) {
-                msg += `${stripHtmlToWA(d.itinerary_desc[idx])}\n`;
+                msg += `${stripHtmlToWA(d.itinerary_desc[idx], '•')}\n`;
             }
             if (d.itinerary_stay_places && d.itinerary_stay_places[idx] && d.itinerary_stay_places[idx] !== 'No Hotel') {
                 msg += `Night Stay: ${d.itinerary_stay_places[idx]}\n`;
@@ -959,7 +998,7 @@ jQuery(document).ready(function($) {
                 if(day_text.trim() !== '') {
                     msg += `*Day ${index + 1}:* ${day_text}\n`;
                     if (d.itinerary_desc && d.itinerary_desc[index]) {
-                        msg += `${stripHtmlToWA(d.itinerary_desc[index])}\n`;
+                        msg += `${stripHtmlToWA(d.itinerary_desc[index], '•')}\n`;
                     }
                     if (d.itinerary_stay_places && d.itinerary_stay_places[index] && d.itinerary_stay_places[index] !== 'No Hotel') {
                         msg += `Night Stay: ${d.itinerary_stay_places[index]}\n`;
@@ -972,7 +1011,17 @@ jQuery(document).ready(function($) {
         msg += buildHotelsText(d.stays) + `\n`;
         
         msg += `*Included in Package:*\n`;
-        msg += `${formatBullets(d.inclusions, '✓')}\n`;
+        msg += `${formatBullets(d.inclusions, '✅')}\n`;
+        
+        if (d.exclusions && stripHtmlToWA(d.exclusions).trim() !== '') {
+            msg += `\n*Excluded from Package:*\n`;
+            msg += `${formatBullets(d.exclusions, '❌')}\n`;
+        }
+        
+        if (d.payment_terms && stripHtmlToWA(d.payment_terms).trim() !== '') {
+            msg += `\n*Payment Terms:*\n`;
+            msg += `${formatBullets(d.payment_terms, '💳')}\n`;
+        }
         
         msg += `\n*Pricing Summary:*\n`;
         msg += `Per Person (Excl. GST): ${pp_base}\n`;
@@ -1342,6 +1391,7 @@ jQuery(document).ready(function($) {
     
     $('#calc_destination').on('change', function() { 
         updateCalculatorDropdowns(); 
+        updateQuoteTerms();
         loadPresets(); 
         loadAddonPresets();
         loadSingleDayPresets();
@@ -1441,7 +1491,7 @@ jQuery(document).ready(function($) {
         
         // Sync before serializing
         $('.tcc-rte-editor').each(function() {
-            $(this).siblings('.tcc-day-desc').val($(this).html());
+            $(this).siblings('textarea').val($(this).html());
         });
 
         let formDataArray = $('#tcc-calc-form').serializeArray();
@@ -1585,6 +1635,13 @@ jQuery(document).ready(function($) {
                     $('#calc_drop').val(d.drop || d.pickup);
                     
                     $('#calc_hotel_cat').val(d.hotel_cat).trigger('change');
+
+                    $('#quote_inclusions_editor').html(d.inclusions || '');
+                    $('#quote_inclusions').val(d.inclusions || '');
+                    $('#quote_exclusions_editor').html(d.exclusions || '');
+                    $('#quote_exclusions').val(d.exclusions || '');
+                    $('#quote_payment_terms_editor').html(d.payment_terms || '');
+                    $('#quote_payment_terms').val(d.payment_terms || '');
                     
                     $('#transport-wrapper').empty();
                     if(r && r.transports) {
@@ -1701,6 +1758,40 @@ jQuery(document).ready(function($) {
         if(quoteData && quoteData.link) {
             copyToClipboardStr(quoteData.link, $(this));
         }
+    });
+
+    // DUPLICATE QUOTE LOGIC
+    $('#pmt_duplicate_quote_btn').on('click', function() {
+        let qid = $('#pmt_quote_select').val();
+        if(!qid) return;
+        
+        if(!confirm("Duplicate this quote to create a new Option?\n\n(Note: Payments and status will NOT be copied to the new quote.)")) return;
+        
+        let btn = $(this);
+        let oldText = btn.text();
+        btn.text('⏳ Copying...').prop('disabled', true);
+        
+        $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_duplicate_quote', quote_id: qid }, function(res) {
+            btn.text(oldText).prop('disabled', false);
+            if(res.success) {
+                alert(res.data.message);
+                
+                // Reload list and jump back to the calculator automatically
+                $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_load_quotes_list' }, function(res2) {
+                    if(res2.success) {
+                        window.tccAllQuotes = res2.data;
+                        renderQuotesDropdown('', 'both');
+                        
+                        if($('#calc_edit_quote_select').length > 0) {
+                            $('#calc_edit_quote_select').val(res.data.new_id).trigger('change');
+                            $('html, body').animate({ scrollTop: $('#calc_edit_quote_select').offset().top - 50 }, 500);
+                        }
+                    }
+                });
+            } else {
+                alert(res.data || "Error duplicating quote.");
+            }
+        });
     });
 
     // EMAIL PROMPT LOGIC FOR SETTINGS DASHBOARD
@@ -2003,6 +2094,28 @@ jQuery(document).ready(function($) {
         }
     });
 
+    $('#master_profit_type').on('change', function() {
+        if ($(this).val() === 'percent') {
+            $('#master_profit_flat_wrapper').hide();
+            $('#master_profit_tier_wrapper').show();
+        } else {
+            $('#master_profit_flat_wrapper').show();
+            $('#master_profit_tier_wrapper').hide();
+        }
+    });
+
+    $('#add_profit_tier_btn').on('click', function() {
+        let row = `
+        <div class="profit-tier-row tcc-repeater-row tcc-fade-in" style="display:flex; gap:10px; margin-bottom:5px;">
+            <input type="number" name="tier_min_pax[]" placeholder="Min Pax" min="1" required style="flex:1;">
+            <input type="number" name="tier_max_pax[]" placeholder="Max Pax" min="1" required style="flex:1;">
+            <input type="number" name="tier_percent[]" placeholder="Profit %" step="0.01" required style="flex:1;">
+            <button type="button" class="remove_profit_tier tcc-btn-del">X</button>
+        </div>`;
+        $('#profit-tiers-wrapper').append(row);
+    });
+    $(document).on('click', '.remove_profit_tier', function() { $(this).closest('.profit-tier-row').remove(); });
+
     $('#tcc-global-settings-form').on('submit', function(e) {
         e.preventDefault();
         let btn = $(this).find('button[type="submit"]');
@@ -2226,11 +2339,28 @@ jQuery(document).ready(function($) {
     
     function populateMasterForm(val) {
         $('#season-settings-wrapper').empty(); 
+        $('#profit-tiers-wrapper').empty();
 
         if(val && tccMasterData[val]) {
             $('#master_dest_name').val(val);
+            
+            let pType = tccMasterData[val].profit_type || 'flat';
+            $('#master_profit_type').val(pType).trigger('change');
             $('#master_profit').val(tccMasterData[val].profit_per_person || 0);
             
+            if (tccMasterData[val].profit_tiers && tccMasterData[val].profit_tiers.length > 0) {
+                $.each(tccMasterData[val].profit_tiers, function(i, tier) {
+                    let row = `
+                    <div class="profit-tier-row tcc-repeater-row tcc-fade-in" style="display:flex; gap:10px; margin-bottom:5px;">
+                        <input type="number" name="tier_min_pax[]" value="${tier.min}" placeholder="Min Pax" min="1" required style="flex:1;">
+                        <input type="number" name="tier_max_pax[]" value="${tier.max}" placeholder="Max Pax" min="1" required style="flex:1;">
+                        <input type="number" name="tier_percent[]" value="${tier.percent}" placeholder="Profit %" step="0.01" required style="flex:1;">
+                        <button type="button" class="remove_profit_tier tcc-btn-del">X</button>
+                    </div>`;
+                    $('#profit-tiers-wrapper').append(row);
+                });
+            }
+
             let p = tccMasterData[val].pickups;
             $('#master_pickups').val(Array.isArray(p) ? p.join(', ') : p);
             
@@ -2243,9 +2373,17 @@ jQuery(document).ready(function($) {
             let c = tccMasterData[val].hotel_categories;
             $('#master_hotel_cats').val(Array.isArray(c) ? c.join(', ') : c);
 
-            $('#master_inclusions').val(tccMasterData[val].inclusions || '');
-            $('#master_exclusions').val(tccMasterData[val].exclusions || '');
-            $('#master_payment_terms').val(tccMasterData[val].payment_terms || '');
+            let inc = tccMasterData[val].inclusions || '';
+            $('#master_inclusions').val(inc);
+            $('#master_inclusions_editor').html(inc);
+
+            let exc = tccMasterData[val].exclusions || '';
+            $('#master_exclusions').val(exc);
+            $('#master_exclusions_editor').html(exc);
+
+            let pmt = tccMasterData[val].payment_terms || '';
+            $('#master_payment_terms').val(pmt);
+            $('#master_payment_terms_editor').html(pmt);
 
             if(tccMasterData[val].seasons && tccMasterData[val].seasons.length > 0) {
                 $.each(tccMasterData[val].seasons, function(i, season) {
@@ -2262,6 +2400,10 @@ jQuery(document).ready(function($) {
         } else {
             $('#tcc-master-settings-form')[0].reset();
             $('#master_dest_name').val('');
+            $('#master_profit_type').val('flat').trigger('change');
+            $('#master_inclusions_editor').html('');
+            $('#master_exclusions_editor').html('');
+            $('#master_payment_terms_editor').html('');
         }
     }
 
@@ -2272,6 +2414,7 @@ jQuery(document).ready(function($) {
         populateMasterForm($('#master_dest_select').val());
         updateSettingsDropdowns();
         updateCalculatorDropdowns();
+        updateQuoteTerms(); 
         fetchHotelNamesList(); 
         fetchTransportPricing(); 
         
@@ -2294,6 +2437,10 @@ jQuery(document).ready(function($) {
 
     $('#tcc-master-settings-form').on('submit', function(e) {
         e.preventDefault();
+        $('#master_inclusions').val($('#master_inclusions_editor').html());
+        $('#master_exclusions').val($('#master_exclusions_editor').html());
+        $('#master_payment_terms').val($('#master_payment_terms_editor').html());
+
         $.post(tcc_ajax_obj.ajax_url, $(this).serialize() + '&action=tcc_save_master_settings', function(res) {
             if(res.success) { 
                 showSettingsMessage(res.data.message); 
