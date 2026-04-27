@@ -64,21 +64,14 @@ function tcc_load_master_finances_ajax() {
     foreach($quotes as $q) {
         $booking_date = date('Y-m-d', strtotime($q->post_date));
         $payments = get_post_meta($q->ID, 'tcc_payments', true);
-        
         $booking_income = 0;
-        $total_discount_payments = 0;
-        $total_vendor_direct = 0;
         $actual_pg_paid = 0; 
         $last_payment_date = $booking_date; 
         $valid_payments = array();
         
         if (is_array($payments)) {
             foreach($payments as $p) {
-                if (isset($p['method']) && $p['method'] === 'Discount') {
-                    $total_discount_payments += floatval($p['amount']);
-                } elseif (isset($p['method']) && $p['method'] === 'Customer Paid Vendor') {
-                    $total_vendor_direct += floatval($p['amount']);
-                } elseif (isset($p['method']) && $p['method'] !== 'Refund') {
+                if (isset($p['method']) && $p['method'] !== 'Refund' && $p['method'] !== 'Direct to Vendor') {
                     $booking_income += floatval($p['amount']);
                     $actual_pg_paid += isset($p['pg_fee']) ? floatval($p['pg_fee']) : 0;
                     if (!empty($p['date'])) {
@@ -100,7 +93,7 @@ function tcc_load_master_finances_ajax() {
         $child_6_12 = isset($sum['child_6_12']) ? intval($sum['child_6_12']) : 0;
         $total_travellers = $pax + $child + $child_6_12;
 
-        $original_grand_total = isset($data['grand_total']) ? floatval($data['grand_total']) : (isset($sum['grand_total']) ? floatval($sum['grand_total']) : 0);
+        $grand_total = isset($data['grand_total']) ? floatval($data['grand_total']) : (isset($sum['grand_total']) ? floatval($sum['grand_total']) : 0);
 
         $total_addon_cost = isset($sum['total_addon_cost']) ? floatval($sum['total_addon_cost']) : 0;
         $quote_addons = array();
@@ -122,55 +115,39 @@ function tcc_load_master_finances_ajax() {
 
         $vendor_payments = get_post_meta($q->ID, 'tcc_vendor_payments', true);
         if(!is_array($vendor_payments)) $vendor_payments = array();
-        
         $vendor_paid = 0;
         foreach($vendor_payments as $vp) { $vendor_paid += floatval($vp['amount']); }
+
+        // --- NEW: TAX WAIVER & DIRECT TO VENDOR SYNC ---
+        $gst_pct = isset($sum['gst_pct']) ? floatval($sum['gst_pct']) / 100 : 0.05;
+        $pt_pct = isset($sum['pt_pct']) ? floatval($sum['pt_pct']) / 100 : 0;
+        $pg_pct = isset($sum['pg_pct']) ? floatval($sum['pg_pct']) / 100 : 0;
+        $total_tax_waiver = 0;
+
+        if (is_array($payments)) {
+            foreach($payments as $p) {
+                if (isset($p['method']) && $p['method'] === 'Direct to Vendor') {
+                    $amt = floatval($p['amount']);
+                    $vendor_paid += $amt;
+                    
+                    // Auto-inject into vendor history
+                    $vendor_payments[] = array(
+                        'date' => $p['date'],
+                        'desc' => 'Auto-Sync: ' . (isset($p['ref']) && $p['ref'] ? $p['ref'] : 'Vendor Payment'),
+                        'amount' => $amt,
+                        'is_auto' => true
+                    );
+
+                    // Revers-calculate the waived tax
+                    $waiver = ($amt * $gst_pct) + ($amt * (1 + $gst_pct) * ($pt_pct + $pg_pct));
+                    $total_tax_waiver += $waiver;
+                }
+            }
+        }
 
         $pt = isset($sum['prof_tax']) ? floatval($sum['prof_tax']) : 0;
         $pg = isset($sum['pg_charge']) ? floatval($sum['pg_charge']) : 0;
         $gst = isset($data['gst']) ? floatval($data['gst']) : 0;
-
-        $total_tax_exempt_amount = $total_discount_payments + $total_vendor_direct;
-        $gst_reduction = 0;
-
-        if ($total_tax_exempt_amount > 0) {
-            $gst_pct = isset($sum['gst_pct']) ? floatval($sum['gst_pct']) : 5;
-            $pt_pct = isset($sum['pt_pct']) ? floatval($sum['pt_pct']) : 0;
-            $pg_pct = isset($sum['pg_pct']) ? floatval($sum['pg_pct']) : 0;
-            
-            if ($pt_pct == 0) {
-                $globals = get_option('tcc_global_settings', array('gst' => 5, 'pt' => 10, 'pg' => 3));
-                $pt_pct = floatval($globals['pt']);
-                $pg_pct = floatval($globals['pg']);
-            }
-
-            $M = 1 + ($gst_pct / 100);
-            $exempt_base = $total_tax_exempt_amount / $M;
-            
-            $gst_reduction = $total_tax_exempt_amount - $exempt_base;
-            $pt_reduction = $total_tax_exempt_amount * ($pt_pct / 100);
-            $pg_reduction = $total_tax_exempt_amount * ($pg_pct / 100);
-
-            // We ONLY drop taxes mathematically here to reflect actuals. 
-            $pt = max(0, $pt - $pt_reduction);
-            $pg = max(0, $pg - $pg_reduction);
-            $gst = max(0, $gst - $gst_reduction);
-        }
-
-        // Dynamically inject Vendor Direct payments into the UI's vendor_history
-        $combined_vendor_history = $vendor_payments;
-        if ($total_vendor_direct > 0 && is_array($payments)) {
-            foreach($payments as $p) {
-                if (isset($p['method']) && $p['method'] === 'Customer Paid Vendor') {
-                    $combined_vendor_history[] = array(
-                        'date' => $p['date'],
-                        'desc' => 'Direct to Vendor (Customer Paid)',
-                        'amount' => floatval($p['amount']),
-                        'is_direct' => true // Flags frontend to render this row differently
-                    );
-                }
-            }
-        }
 
         $manual_expenses = get_post_meta($q->ID, 'tcc_manual_expenses', true);
         if (!is_array($manual_expenses)) $manual_expenses = array();
@@ -181,20 +158,9 @@ function tcc_load_master_finances_ajax() {
         $bookings_data[$q->ID] = array(
             'title' => $q->post_title . ' | ' . $c_name . ' (' . $dest . ')', 'url' => get_permalink($q->ID), 'destination' => $dest,
             'pax' => $total_travellers, 'booking_date' => $booking_date, 'final_payment_date' => $last_payment_date, 'payment_history' => $valid_payments,
-            'income' => $booking_income, 
-            'pkg_value' => $original_grand_total, 
-            'auto_cost' => $base_cost_no_addons, 
-            'discount_waived' => $total_discount_payments,
-            'vendor_direct' => $total_vendor_direct,
-            'gst_reduction' => $gst_reduction,
-            'vendor_paid' => $vendor_paid, 
-            'vendor_history' => $combined_vendor_history, 
-            'auto_pt' => $pt, 
-            'auto_pg' => $pg, 
-            'actual_pg' => $actual_pg_paid,
-            'auto_gst' => $gst, 
-            'quote_addons' => $quote_addons, 
-            'manual_expenses' => $manual_expenses
+            'income' => $booking_income, 'pkg_value' => $grand_total, 'auto_cost' => $base_cost_no_addons,
+            'vendor_paid' => $vendor_paid, 'vendor_history' => $vendor_payments, 'auto_pt' => $pt, 'auto_pg' => $pg, 'actual_pg' => $actual_pg_paid,
+            'auto_gst' => $gst, 'tax_waiver' => $total_tax_waiver, 'quote_addons' => $quote_addons, 'manual_expenses' => $manual_expenses
         );
     }
 
@@ -210,6 +176,7 @@ function tcc_load_master_finances_ajax() {
     $partners = get_option('tcc_agency_partners', array());
     if(!is_array($partners)) $partners = array();
     
+    // Fallback migration to inject "history" and "is_investor" format into any older partner data arrays
     foreach($partners as &$p) {
         if(!isset($p['history'])) {
             $p['history'] = array(array('date' => '2000-01-01', 'percent' => isset($p['percent']) ? floatval($p['percent']) : 0));
@@ -245,7 +212,6 @@ function tcc_save_booking_expense_ajax() {
         update_post_meta($quote_id, 'tcc_override_actual_cost', $new_override);
     } else { delete_post_meta($quote_id, 'tcc_override_actual_cost'); }
 
-    // Save only standard manual vendor payments (exclude Direct payments generated by JS)
     $vp_dates = isset($_POST['vp_date']) ? $_POST['vp_date'] : array();
     $vp_descs = isset($_POST['vp_desc']) ? $_POST['vp_desc'] : array();
     $vp_amts  = isset($_POST['vp_amt']) ? $_POST['vp_amt'] : array();
@@ -320,6 +286,17 @@ function tcc_save_auto_expense_ajax() {
         $autos[] = array('id' => uniqid('ae_'), 'category' => $cat, 'desc' => $desc, 'amount' => $amount, 'freq' => $freq);
     }
     update_option('tcc_auto_daily_expenses', array_values($autos));
+    wp_send_json_success();
+}
+
+function tcc_delete_auto_expense_ajax() {
+    if ( ! is_user_logged_in() ) wp_die();
+    $id = sanitize_text_field($_POST['id']);
+    $autos = get_option('tcc_auto_daily_expenses', array());
+    if(!is_array($autos)) $autos = array(); 
+    $new_autos = array();
+    foreach($autos as $a) { if($a['id'] !== $id) $new_autos[] = $a; }
+    update_option('tcc_auto_daily_expenses', array_values($new_autos));
     wp_send_json_success();
 }
 

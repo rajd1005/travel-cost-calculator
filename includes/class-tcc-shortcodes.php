@@ -19,6 +19,8 @@ function tcc_get_safe_master_data() {
                 'inclusions' => '',
                 'exclusions' => '',
                 'payment_terms' => '',
+                'dest_note' => '',
+                'company_details' => '',
                 'seasons' => array()
             )
         );
@@ -30,7 +32,8 @@ function tcc_get_global_settings() {
     return get_option('tcc_global_settings', array(
         'gst' => 5,
         'pt' => 10,
-        'pg' => 3
+        'pg' => 3,
+        'company_banner' => ''
     ));
 }
 
@@ -39,7 +42,7 @@ function tcc_render_calculator_form() {
         return '<div style="padding:40px; text-align:center; color:#dc2626; font-family:sans-serif; background:#fee2e2; border:1px solid #f87171; border-radius:6px; margin:20px 0;"><strong>Access Denied:</strong> Please log in to access the Travel Calculator.</div>';
     }
 
-    // Ensures the WordPress media uploader is loaded for the day-wise images
+    // Ensures the WordPress media uploader is loaded
     wp_enqueue_media();
 
     $master_data = tcc_get_safe_master_data();
@@ -56,16 +59,99 @@ function tcc_render_calculator_form() {
             var tccGlobalSettings = <?php echo json_encode($global_settings); ?>;
         </script>
 
+        <div class="tcc-accordion" style="margin-bottom: 20px;">
+            <div class="tcc-accordion-header" style="background:#f0fdf4; color:#166534; border-color:#bbf7d0; cursor:pointer; padding:12px 15px; border-radius:4px; font-weight:bold; display:flex; justify-content:space-between; border:1px solid #bbf7d0;">
+                <span>💳 Manage Bookings & Payments</span>
+                <span>&#9660;</span>
+            </div>
+            <div class="tcc-accordion-body" style="background:#f8fafc; display:none; padding:15px; border:1px solid #e2e8f0; border-top:none; border-radius:0 0 4px 4px;">
+                
+                <div style="display:flex; gap:10px; margin-bottom:10px;">
+                    <input type="text" id="pmt_quote_search" placeholder="Search Name, Email, or WA No..." style="flex:1;">
+                    <select id="pmt_quote_select" style="flex:2;">
+                        <option value="">-- Select Quote/Booking --</option>
+                    </select>
+                </div>
+
+                <div id="pmt_quote_actions" style="display:none; gap:10px; margin-bottom:15px; flex-wrap:wrap;">
+                    <button type="button" id="pmt_view_quote_btn" class="tcc-btn-secondary" style="margin:0; flex:1; min-width:90px; background:#f0f9ff; color:#0284c7; border-color:#bae6fd;">👁️ View</button>
+                    <button type="button" id="pmt_copy_quote_btn" class="tcc-btn-secondary" style="margin:0; flex:1; min-width:90px; background:#f0fdf4; color:#16a34a; border-color:#bbf7d0;">📋 Link</button>
+                    <button type="button" id="pmt_edit_quote_btn" class="tcc-btn-secondary" style="margin:0; flex:1; min-width:110px;">✏️ Client Info</button>
+                    <button type="button" id="pmt_delete_quote_btn" class="tcc-btn-del" style="margin:0; flex:1; min-width:90px; background:#fee2e2; color:#dc2626; border-color:#f87171;">🗑️ Delete</button>
+                </div>
+
+                <div id="pmt_edit_client_wrapper" style="display:none; background:#fff; padding:15px; border:1px solid #cbd5e1; border-radius:4px; margin-bottom:15px;">
+                    <h4 style="margin:0 0 10px 0; color:#334155;">Update Client Details Only</h4>
+                    <div class="tcc-grid-3">
+                        <input type="text" id="edit_c_name" placeholder="Client Name">
+                        <input type="text" id="edit_c_phone" placeholder="WA Number">
+                        <input type="email" id="edit_c_email" placeholder="Email">
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button type="button" id="save_edit_client_btn" class="tcc-btn-primary" style="margin:0; flex:1;">Save Details</button>
+                        <button type="button" id="cancel_edit_client_btn" class="tcc-btn-secondary" style="margin:0; flex:1;">Cancel</button>
+                    </div>
+                </div>
+
+                <div id="pmt_dashboard" style="display:none; margin-top:15px; border-top:2px solid #e2e8f0; padding-top:15px;">
+                    <div class="tcc-grid-3" style="background:#fff; padding:10px; border-radius:4px; border:1px solid #e2e8f0; margin-bottom:10px; text-align:center;">
+                        <div>
+                            <div style="font-size:11px; color:#64748b; text-transform:uppercase;">Total Value</div>
+                            <div id="pmt_total_val" style="font-weight:bold; font-size:16px; color:#0f172a;">₹0.00</div>
+                        </div>
+                        <div>
+                            <div style="font-size:11px; color:#64748b; text-transform:uppercase;">Total Received</div>
+                            <div id="pmt_received_val" style="font-weight:bold; font-size:16px; color:#16a34a;">₹0.00</div>
+                        </div>
+                        <div>
+                            <div style="font-size:11px; color:#64748b; text-transform:uppercase;">Balance Due</div>
+                            <div id="pmt_balance_val" style="font-weight:bold; font-size:16px; color:#dc2626;">₹0.00</div>
+                        </div>
+                    </div>
+
+                    <div id="pmt_vendor_direct_wrapper" style="background:#fffbeb; border:1px solid #fde68a; color:#92400e; padding:10px; border-radius:4px; margin-bottom:15px; display:none; justify-content:space-between; align-items:center;">
+                        <div>
+                            <span style="font-size:12px; display:block; margin-bottom:4px;"><strong>If Paid Direct to Vendor</strong><br><small>(Excludes GST, PT & PG)</small></span>
+                            <div style="font-size:11px; color:#16a34a;">Potential Tax Waiver: <strong id="pmt_vendor_waiver_val">₹0.00</strong></div>
+                        </div>
+                        <div id="pmt_vendor_balance_val" style="font-weight:bold; font-size:18px; color:#b45309;">₹0.00</div>
+                    </div>
+
+                    <div id="pmt_missing_client_msg" style="display:none; background:#fffbeb; color:#92400e; padding:10px; border:1px solid #fde68a; border-radius:4px; margin-bottom:15px; text-align:center;">
+                        ⚠️ <strong>Client Details Missing!</strong> You must click "✏️ Client Info" above and add the Client Name and Phone number before you can record transactions.
+                    </div>
+
+                    <div id="tcc-add-payment-wrapper">
+                        <h4 style="margin:0 0 10px 0; font-size:14px; color:#334155;">Record New Transaction</h4>
+                        <form id="tcc-add-payment-form" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px;">
+                            <input type="hidden" id="pmt_edit_id" value="">
+                            <input type="date" id="pmt_date" required style="flex:1; min-width:120px;" title="Transaction Date">
+                            <input type="number" id="pmt_amount" placeholder="Amount (₹) *" step="0.01" min="1" required style="flex:1; min-width:100px;">
+                            <input type="number" id="pmt_pg_fee" step="0.01" min="0" placeholder="PG Fee (₹) *" required style="padding:8px 12px; border-radius:4px; border:1px solid #ccc; flex:1; min-width:110px;" title="Actual PG fee deducted (Type 0 if none)">
+                            <select id="pmt_method" required style="flex:1; min-width:120px;">
+                                <option value="UPI">UPI</option>
+                                <option value="Bank Transfer">Bank Transfer</option>
+                                <option value="Cash">Cash</option>
+                                <option value="Card">Card</option>
+                                <option value="Direct to Vendor" style="color:#d97706; font-weight:bold;">Direct to Vendor</option>
+                                <option value="Refund" style="color:red; font-weight:bold;">Refund / Cancellation</option>
+                            </select>
+                            <input type="text" id="pmt_ref" placeholder="Txn Ref / Details" style="flex:2; min-width:150px;">
+                            <button type="submit" class="tcc-btn-primary" style="margin:0; flex:1; min-width:100px;">Add Record</button>
+                            <button type="button" id="pmt_cancel_edit_btn" class="tcc-btn-secondary" style="display:none; margin:0; flex:0.5; min-width:80px;">Cancel</button>
+                        </form>
+                    </div>
+
+                    <h4 style="margin:0 0 10px 0; font-size:14px; color:#334155;">Transaction History</h4>
+                    <div id="pmt_history_table" style="background:#fff; border:1px solid #e2e8f0; border-radius:4px; overflow-x:auto;">
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <form id="tcc-calc-form" class="tcc-form">
             
-            <div class="tcc-card" style="background:#f8fafc; border-color:#cbd5e1; display:flex; justify-content:space-between; align-items:center; padding:10px 15px; flex-wrap:wrap; gap:10px;">
-                <strong style="color:#334155; font-size:14px; margin-right:auto;">✏️ Load Quote to Edit:</strong>
-                <input type="text" id="calc_quote_search" placeholder="Search Name, Phone, Email..." style="padding:4px 8px; font-size:13px; width:200px; border:1px solid #ccc; border-radius:3px; margin:0;">
-                <select id="calc_edit_quote_select" style="max-width:250px; margin:0; font-size:13px; flex:1;">
-                    <option value="">-- Create New Quote --</option>
-                </select>
-                <input type="hidden" name="edit_quote_id" id="edit_quote_id" value="">
-            </div>
+            <input type="hidden" name="edit_quote_id" id="edit_quote_id" value="">
 
             <div id="tcc-step-1" class="tcc-step active">
                 
@@ -308,6 +394,36 @@ function tcc_render_calculator_form() {
                             </div>
                         </div>
 
+                        <div class="tcc-form-group" style="margin-top:10px;">
+                            <label>Destination Note (Optional)</label>
+                            <div class="tcc-rte-container" style="border:1px solid #cbd5e1; border-radius:4px; background:#fff; overflow:hidden;">
+                                <div class="tcc-rte-toolbar" style="background:#f1f5f9; padding:6px; border-bottom:1px solid #cbd5e1; display:flex; gap:6px; flex-wrap:wrap;">
+                                    <button type="button" class="tcc-rte-btn" data-cmd="bold" style="font-weight:bold; cursor:pointer;" title="Bold">B</button>
+                                    <button type="button" class="tcc-rte-btn" data-cmd="italic" style="font-style:italic; cursor:pointer;" title="Italic">I</button>
+                                    <button type="button" class="tcc-rte-btn" data-cmd="underline" style="text-decoration:underline; cursor:pointer;" title="Underline">U</button>
+                                    <div style="width:1px; background:#cbd5e1; margin:0 4px;"></div>
+                                    <button type="button" class="tcc-rte-btn" data-cmd="insertUnorderedList" style="cursor:pointer;" title="Bullet List">• Bullets</button>
+                                </div>
+                                <div class="tcc-rte-editor" id="quote_dest_note_editor" contenteditable="true" style="padding:12px; min-height:80px; font-size:13px; outline:none; line-height:1.6; color:#334155;"></div>
+                                <textarea name="quote_dest_note" id="quote_dest_note" style="display:none;"></textarea>
+                            </div>
+                        </div>
+
+                        <div class="tcc-form-group" style="margin-top:10px;">
+                            <label>Company Details</label>
+                            <div class="tcc-rte-container" style="border:1px solid #cbd5e1; border-radius:4px; background:#fff; overflow:hidden;">
+                                <div class="tcc-rte-toolbar" style="background:#f1f5f9; padding:6px; border-bottom:1px solid #cbd5e1; display:flex; gap:6px; flex-wrap:wrap;">
+                                    <button type="button" class="tcc-rte-btn" data-cmd="bold" style="font-weight:bold; cursor:pointer;" title="Bold">B</button>
+                                    <button type="button" class="tcc-rte-btn" data-cmd="italic" style="font-style:italic; cursor:pointer;" title="Italic">I</button>
+                                    <button type="button" class="tcc-rte-btn" data-cmd="underline" style="text-decoration:underline; cursor:pointer;" title="Underline">U</button>
+                                    <div style="width:1px; background:#cbd5e1; margin:0 4px;"></div>
+                                    <button type="button" class="tcc-rte-btn" data-cmd="insertUnorderedList" style="cursor:pointer;" title="Bullet List">• Bullets</button>
+                                </div>
+                                <div class="tcc-rte-editor" id="quote_company_details_editor" contenteditable="true" style="padding:12px; min-height:80px; font-size:13px; outline:none; line-height:1.6; color:#334155;"></div>
+                                <textarea name="quote_company_details" id="quote_company_details" style="display:none;"></textarea>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
 
@@ -477,6 +593,8 @@ function tcc_render_settings_dashboard() {
         return '<div style="padding:40px; text-align:center; color:#dc2626; font-family:sans-serif; background:#fee2e2; border:1px solid #f87171; border-radius:6px; margin:20px 0;"><strong>Access Denied:</strong> Please log in to access the Settings Dashboard.</div>';
     }
 
+    wp_enqueue_media(); // Ensure media uploader is ready for the banner
+
     $master_data = tcc_get_safe_master_data();
     $global_settings = tcc_get_global_settings();
     $destinations = array_keys($master_data);
@@ -486,12 +604,27 @@ function tcc_render_settings_dashboard() {
         <script>
             var tccMasterData = <?php echo json_encode($master_data); ?>;
             var tccGlobalSettings = <?php echo json_encode($global_settings); ?>;
+            
+            // Inline JS to handle WP Media Uploader for the Banner
+            if (typeof jQuery !== 'undefined') {
+                jQuery(document).ready(function($){
+                    $('#upload_banner_btn').click(function(e) {
+                        e.preventDefault();
+                        var image = wp.media({ title: 'Upload Company Banner', multiple: false }).open()
+                        .on('select', function(e){
+                            var uploaded_image = image.state().get('selection').first();
+                            var image_url = uploaded_image.toJSON().url;
+                            $('#global_banner').val(image_url);
+                        });
+                    });
+                });
+            }
         </script>
         
         <h3 style="text-align:center; margin-bottom:15px; font-size:16px;">Agency Settings</h3>
 
         <div class="tcc-accordion">
-            <div class="tcc-accordion-header" style="background:#fef3c7; color:#92400e; border-color:#fde68a;">1. Global Taxes & Fees <span>&#9660;</span></div>
+            <div class="tcc-accordion-header" style="background:#fef3c7; color:#92400e; border-color:#fde68a;">1. Global Settings & Taxes <span>&#9660;</span></div>
             <div class="tcc-accordion-body" style="background:#fffbeb;">
                 <form id="tcc-global-settings-form">
                     <div class="tcc-grid-3">
@@ -508,7 +641,14 @@ function tcc_render_settings_dashboard() {
                             <input type="number" name="global_pg" id="global_pg" step="0.01" value="<?php echo esc_attr($global_settings['pg']); ?>" required>
                         </div>
                     </div>
-                    <button type="submit" class="tcc-btn-primary" style="background:#d97706; border-color:#b45309;">Save Global Taxes</button>
+                    <div class="tcc-form-group">
+                        <label>Company Banner Image (Shows at the bottom of Quote/PDF)</label>
+                        <div style="display:flex; gap:10px;">
+                            <input type="url" name="global_banner" id="global_banner" value="<?php echo esc_attr($global_settings['company_banner']); ?>" style="flex:1;" placeholder="Image URL">
+                            <button type="button" class="tcc-btn-secondary" id="upload_banner_btn" style="margin:0;">Choose Image</button>
+                        </div>
+                    </div>
+                    <button type="submit" class="tcc-btn-primary" style="background:#d97706; border-color:#b45309;">Save Global Settings</button>
                 </form>
             </div>
         </div>
@@ -596,6 +736,36 @@ function tcc_render_settings_dashboard() {
                         </div>
                     </div>
 
+                    <div class="tcc-form-group" style="margin-top:10px;">
+                        <label>Destination Note (Optional)</label>
+                        <div class="tcc-rte-container" style="border:1px solid #cbd5e1; border-radius:4px; background:#fff; overflow:hidden;">
+                            <div class="tcc-rte-toolbar" style="background:#f1f5f9; padding:6px; border-bottom:1px solid #cbd5e1; display:flex; gap:6px; flex-wrap:wrap;">
+                                <button type="button" class="tcc-rte-btn" data-cmd="bold" style="font-weight:bold; cursor:pointer;" title="Bold">B</button>
+                                <button type="button" class="tcc-rte-btn" data-cmd="italic" style="font-style:italic; cursor:pointer;" title="Italic">I</button>
+                                <button type="button" class="tcc-rte-btn" data-cmd="underline" style="text-decoration:underline; cursor:pointer;" title="Underline">U</button>
+                                <div style="width:1px; background:#cbd5e1; margin:0 4px;"></div>
+                                <button type="button" class="tcc-rte-btn" data-cmd="insertUnorderedList" style="cursor:pointer;" title="Bullet List">• Bullets</button>
+                            </div>
+                            <div class="tcc-rte-editor" id="master_dest_note_editor" contenteditable="true" style="padding:12px; min-height:80px; font-size:13px; outline:none; line-height:1.6; color:#334155;"></div>
+                            <textarea name="master_dest_note" id="master_dest_note" style="display:none;"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="tcc-form-group" style="margin-top:10px;">
+                        <label>Company Details</label>
+                        <div class="tcc-rte-container" style="border:1px solid #cbd5e1; border-radius:4px; background:#fff; overflow:hidden;">
+                            <div class="tcc-rte-toolbar" style="background:#f1f5f9; padding:6px; border-bottom:1px solid #cbd5e1; display:flex; gap:6px; flex-wrap:wrap;">
+                                <button type="button" class="tcc-rte-btn" data-cmd="bold" style="font-weight:bold; cursor:pointer;" title="Bold">B</button>
+                                <button type="button" class="tcc-rte-btn" data-cmd="italic" style="font-style:italic; cursor:pointer;" title="Italic">I</button>
+                                <button type="button" class="tcc-rte-btn" data-cmd="underline" style="text-decoration:underline; cursor:pointer;" title="Underline">U</button>
+                                <div style="width:1px; background:#cbd5e1; margin:0 4px;"></div>
+                                <button type="button" class="tcc-rte-btn" data-cmd="insertUnorderedList" style="cursor:pointer;" title="Bullet List">• Bullets</button>
+                            </div>
+                            <div class="tcc-rte-editor" id="master_company_details_editor" contenteditable="true" style="padding:12px; min-height:80px; font-size:13px; outline:none; line-height:1.6; color:#334155;"></div>
+                            <textarea name="master_company_details" id="master_company_details" style="display:none;"></textarea>
+                        </div>
+                    </div>
+
                     <div class="tcc-form-group" style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
                         <label>Season Surcharges (% increase on Hotel & Cab)</label>
                         <div id="season-settings-wrapper"></div>
@@ -680,89 +850,7 @@ function tcc_render_settings_dashboard() {
         </div>
 
         <div class="tcc-accordion">
-            <div class="tcc-accordion-header" style="background:#f0fdf4; color:#166534; border-color:#bbf7d0;">5. Manage Bookings & Payments <span>&#9660;</span></div>
-            <div class="tcc-accordion-body" style="background:#f8fafc;">
-                
-                <div style="display:flex; gap:10px; margin-bottom:10px;">
-                    <input type="text" id="pmt_quote_search" placeholder="Search Name, Email, or WA No..." style="flex:1;">
-                    <select id="pmt_quote_select" style="flex:2;">
-                        <option value="">-- Select Quote/Booking --</option>
-                    </select>
-                </div>
-
-                <div id="pmt_quote_actions" style="display:none; gap:10px; margin-bottom:15px; flex-wrap:wrap;">
-                    <button type="button" id="pmt_view_quote_btn" class="tcc-btn-secondary" style="margin:0; flex:1; min-width:90px; background:#f0f9ff; color:#0284c7; border-color:#bae6fd;">👁️ View</button>
-                    <button type="button" id="pmt_copy_quote_btn" class="tcc-btn-secondary" style="margin:0; flex:1; min-width:90px; background:#f0fdf4; color:#16a34a; border-color:#bbf7d0;">📋 Link</button>
-                    <button type="button" id="pmt_duplicate_quote_btn" class="tcc-btn-secondary" style="margin:0; flex:1; min-width:110px; background:#f3e8ff; color:#6b21a8; border-color:#d8b4fe;">📄 Duplicate</button>
-                    <button type="button" id="pmt_edit_quote_btn" class="tcc-btn-secondary" style="margin:0; flex:1; min-width:110px;">✏️ Client Info</button>
-                    <button type="button" id="pmt_full_edit_btn" class="tcc-btn-secondary" style="margin:0; flex:1; min-width:110px; background:#fffbeb; color:#b45309; border-color:#fde68a;">🛠️ Full Edit</button>
-                    <button type="button" id="pmt_delete_quote_btn" class="tcc-btn-del" style="margin:0; flex:1; min-width:90px; background:#fee2e2; color:#dc2626; border-color:#f87171;">🗑️ Delete</button>
-                </div>
-
-                <div id="pmt_edit_client_wrapper" style="display:none; background:#fff; padding:15px; border:1px solid #cbd5e1; border-radius:4px; margin-bottom:15px;">
-                    <h4 style="margin:0 0 10px 0; color:#334155;">Update Client Details Only</h4>
-                    <div class="tcc-grid-3">
-                        <input type="text" id="edit_c_name" placeholder="Client Name">
-                        <input type="text" id="edit_c_phone" placeholder="WA Number">
-                        <input type="email" id="edit_c_email" placeholder="Email">
-                    </div>
-                    <div style="display:flex; gap:10px;">
-                        <button type="button" id="save_edit_client_btn" class="tcc-btn-primary" style="margin:0; flex:1;">Save Details</button>
-                        <button type="button" id="cancel_edit_client_btn" class="tcc-btn-secondary" style="margin:0; flex:1;">Cancel</button>
-                    </div>
-                </div>
-
-                <div id="pmt_dashboard" style="display:none; margin-top:15px; border-top:2px solid #e2e8f0; padding-top:15px;">
-                    <div class="tcc-grid-3" style="background:#fff; padding:10px; border-radius:4px; border:1px solid #e2e8f0; margin-bottom:15px; text-align:center;">
-                        <div>
-                            <div style="font-size:11px; color:#64748b; text-transform:uppercase;">Total Value</div>
-                            <div id="pmt_total_val" style="font-weight:bold; font-size:16px; color:#0f172a;">₹0.00</div>
-                        </div>
-                        <div>
-                            <div style="font-size:11px; color:#64748b; text-transform:uppercase;">Total Received</div>
-                            <div id="pmt_received_val" style="font-weight:bold; font-size:16px; color:#16a34a;">₹0.00</div>
-                        </div>
-                        <div>
-                            <div style="font-size:11px; color:#64748b; text-transform:uppercase;">Balance Due</div>
-                            <div id="pmt_balance_val" style="font-weight:bold; font-size:16px; color:#dc2626;">₹0.00</div>
-                        </div>
-                    </div>
-
-                    <div id="pmt_missing_client_msg" style="display:none; background:#fffbeb; color:#92400e; padding:10px; border:1px solid #fde68a; border-radius:4px; margin-bottom:15px; text-align:center;">
-                        ⚠️ <strong>Client Details Missing!</strong> You must click "✏️ Client Info" above and add the Client Name and Phone number before you can record transactions.
-                    </div>
-
-                    <div id="tcc-add-payment-wrapper">
-                        <h4 style="margin:0 0 10px 0; font-size:14px; color:#334155;">Record New Transaction</h4>
-                        <form id="tcc-add-payment-form" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px;">
-                            <input type="hidden" id="pmt_edit_id" value="">
-                            <input type="date" id="pmt_date" required style="flex:1; min-width:120px;" title="Transaction Date">
-                            <input type="number" id="pmt_amount" placeholder="Amount (₹) *" step="0.01" min="1" required style="flex:1; min-width:100px;">
-                            <input type="number" id="pmt_pg_fee" step="0.01" min="0" placeholder="PG Fee (₹) *" required style="padding:8px 12px; border-radius:4px; border:1px solid #ccc; flex:1; min-width:110px;" title="Actual PG fee deducted (Type 0 if none)">
-                            <select id="pmt_method" required style="flex:1; min-width:120px;">
-                                <option value="UPI">UPI</option>
-                                <option value="Bank Transfer">Bank Transfer</option>
-                                <option value="Cash">Cash</option>
-                                <option value="Card">Card</option>
-                                <option value="Discount" style="color:#0284c7; font-weight:bold;">Discount / Waive Off</option>
-                                <option value="Customer Paid Vendor" style="color:#d97706; font-weight:bold;">Customer Paid Vendor</option>
-                                <option value="Refund" style="color:red; font-weight:bold;">Refund / Cancellation</option>
-                            </select>
-                            <input type="text" id="pmt_ref" placeholder="Txn Ref / Details" style="flex:2; min-width:150px;">
-                            <button type="submit" class="tcc-btn-primary" style="margin:0; flex:1; min-width:100px;">Add Record</button>
-                            <button type="button" id="pmt_cancel_edit_btn" class="tcc-btn-secondary" style="display:none; margin:0; flex:0.5; min-width:80px;">Cancel</button>
-                        </form>
-                    </div>
-
-                    <h4 style="margin:0 0 10px 0; font-size:14px; color:#334155;">Transaction History</h4>
-                    <div id="pmt_history_table" style="background:#fff; border:1px solid #e2e8f0; border-radius:4px; overflow:hidden;">
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="tcc-accordion">
-            <div class="tcc-accordion-header" style="background:#f1f5f9; color:#334155; border-color:#cbd5e1;">6. Backup & Restore <span>&#9660;</span></div>
+            <div class="tcc-accordion-header" style="background:#f1f5f9; color:#334155; border-color:#cbd5e1;">5. Backup & Restore <span>&#9660;</span></div>
             <div class="tcc-accordion-body" style="background:#fff;">
                 <div class="tcc-grid-2">
                     <div style="border:1px solid #e2e8f0; padding:15px; border-radius:4px; text-align:center;">
@@ -783,6 +871,34 @@ function tcc_render_settings_dashboard() {
 
         <div id="tcc_settings_msg" style="display:none; margin-top:10px; padding:8px; background:#d4edda; color:#155724; border:1px solid #c3e6cb; border-radius:3px; text-align:center; font-weight:bold;"></div>
     </div>
+
+    <script>
+    if (typeof jQuery !== 'undefined') {
+        jQuery(document).ajaxSuccess(function(event, xhr, settings) {
+            if (settings.data && settings.data.indexOf('action=tcc_load_quote_payments') !== -1) {
+                try {
+                    var res = JSON.parse(xhr.responseText);
+                    if (res.success && res.data) {
+                        var vbal = res.data.vendor_direct_balance || 0;
+                        var bal = res.data.balance || 0;
+                        var waiver = bal - vbal;
+                        if(waiver < 0) waiver = 0;
+                        
+                        jQuery('#pmt_vendor_balance_val').text('₹' + parseFloat(vbal).toFixed(2));
+                        jQuery('#pmt_vendor_waiver_val').text('₹' + parseFloat(waiver).toFixed(2));
+                        
+                        // Hide the vendor direct box if there is no balance remaining
+                        if (vbal <= 0) {
+                            jQuery('#pmt_vendor_direct_wrapper').hide();
+                        } else {
+                            jQuery('#pmt_vendor_direct_wrapper').css('display', 'flex');
+                        }
+                    }
+                } catch(e) {}
+            }
+        });
+    }
+    </script>
     <?php
     return ob_get_clean();
 }

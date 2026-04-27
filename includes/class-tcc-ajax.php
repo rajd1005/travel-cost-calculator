@@ -37,7 +37,7 @@ add_action( 'wp_ajax_tcc_add_payment', 'tcc_add_payment' );
 add_action( 'wp_ajax_tcc_delete_payment', 'tcc_delete_payment' );
 
 add_action( 'wp_ajax_tcc_delete_quote', 'tcc_delete_quote' );
-add_action( 'wp_ajax_tcc_duplicate_quote', 'tcc_duplicate_quote' ); 
+add_action( 'wp_ajax_tcc_duplicate_quote', 'tcc_duplicate_quote' ); // NEW DUPLICATE ACTION
 add_action( 'wp_ajax_tcc_update_quote_client', 'tcc_update_quote_client' );
 add_action( 'wp_ajax_tcc_get_full_quote_data', 'tcc_get_full_quote_data' );
 
@@ -252,6 +252,11 @@ function tcc_calculate_trip() {
     $dest_exclusions = isset($_POST['quote_exclusions']) && !empty($_POST['quote_exclusions']) ? wp_kses_post(wp_unslash($_POST['quote_exclusions'])) : (isset($master_data[$destination]['exclusions']) ? $master_data[$destination]['exclusions'] : '');
     
     $dest_payment_terms = isset($_POST['quote_payment_terms']) && !empty($_POST['quote_payment_terms']) ? wp_kses_post(wp_unslash($_POST['quote_payment_terms'])) : (isset($master_data[$destination]['payment_terms']) ? $master_data[$destination]['payment_terms'] : '');
+
+    $dest_note = isset($_POST['quote_dest_note']) && !empty($_POST['quote_dest_note']) ? wp_kses_post(wp_unslash($_POST['quote_dest_note'])) : (isset($master_data[$destination]['dest_note']) ? $master_data[$destination]['dest_note'] : '');
+
+    $company_details = isset($_POST['quote_company_details']) && !empty($_POST['quote_company_details']) ? wp_kses_post(wp_unslash($_POST['quote_company_details'])) : (isset($master_data[$destination]['company_details']) ? $master_data[$destination]['company_details'] : '');
+
 
     $surcharge_percent = 0;
     $surcharge_date = !empty($start_date) ? $start_date : date('Y-m-d'); 
@@ -521,6 +526,8 @@ function tcc_calculate_trip() {
         'inclusions'  => $dest_inclusions,
         'exclusions'  => $dest_exclusions,
         'payment_terms' => $dest_payment_terms,
+        'dest_note'   => $dest_note,
+        'company_details' => $company_details,
         
         'actual_cost' => round($actual_cost, 2),
         'total_hotel_cost' => round($hotel_cost, 2),
@@ -574,6 +581,8 @@ function tcc_calculate_trip() {
         'quote_inclusions' => isset($_POST['quote_inclusions']) ? wp_unslash($_POST['quote_inclusions']) : '',
         'quote_exclusions' => isset($_POST['quote_exclusions']) ? wp_unslash($_POST['quote_exclusions']) : '',
         'quote_payment_terms' => isset($_POST['quote_payment_terms']) ? wp_unslash($_POST['quote_payment_terms']) : '',
+        'quote_dest_note' => isset($_POST['quote_dest_note']) ? wp_unslash($_POST['quote_dest_note']) : '',
+        'quote_company_details' => isset($_POST['quote_company_details']) ? wp_unslash($_POST['quote_company_details']) : '',
         'itinerary_desc' => is_array($day_itinerary_desc) ? array_map('wp_kses_post', $day_itinerary_desc) : array(),
         'itinerary_image' => is_array($day_itinerary_image) ? $day_itinerary_image : array(),
         'itinerary_stay_place' => is_array($day_itinerary_stays) ? $day_itinerary_stays : array(),
@@ -627,6 +636,7 @@ function tcc_calculate_trip() {
     ));
 }
 
+// NEW FUNCTION: Duplicate Quote Action
 function tcc_duplicate_quote() {
     if ( ! is_user_logged_in() ) wp_die();
     $quote_id = intval($_POST['quote_id']);
@@ -648,13 +658,16 @@ function tcc_duplicate_quote() {
         'post_type' => 'tcc_quote',
         'post_name' => $random_string,
         'post_title' => $post_title,
-        'post_content' => wp_slash( $post->post_content ), 
+        'post_content' => wp_slash( $post->post_content ), // Directly clone the identical JSON content
         'post_status' => 'publish'
     ));
 
     if(is_wp_error($new_post_id)) {
         wp_send_json_error('Failed to duplicate.');
     }
+
+    // Notice we DO NOT copy over post_meta for "tcc_payments" or "tcc_lead_status".
+    // This correctly makes the duplicate an empty slate waiting to be turned into a new option!
 
     wp_send_json_success(array(
         'new_id' => $new_post_id,
@@ -722,13 +735,15 @@ function tcc_save_global_settings() {
     $gst = floatval($_POST['global_gst']);
     $pt = floatval($_POST['global_pt']);
     $pg = floatval($_POST['global_pg']);
+    $banner = isset($_POST['global_banner']) ? esc_url_raw($_POST['global_banner']) : '';
 
     update_option('tcc_global_settings', array(
         'gst' => $gst,
         'pt' => $pt,
-        'pg' => $pg
+        'pg' => $pg,
+        'company_banner' => $banner
     ));
-    wp_send_json_success(array('message' => 'Global Taxes & Fees Saved!'));
+    wp_send_json_success(array('message' => 'Global Settings & Taxes Saved!'));
 }
 
 function tcc_get_full_quote_data() {
@@ -849,6 +864,9 @@ function tcc_save_master_settings() {
     $inclusions = wp_kses_post(wp_unslash($_POST['master_inclusions']));
     $exclusions = wp_kses_post(wp_unslash($_POST['master_exclusions']));
     $payment_terms = wp_kses_post(wp_unslash($_POST['master_payment_terms']));
+    
+    $dest_note = isset($_POST['master_dest_note']) ? wp_kses_post(wp_unslash($_POST['master_dest_note'])) : '';
+    $company_details = isset($_POST['master_company_details']) ? wp_kses_post(wp_unslash($_POST['master_company_details'])) : '';
 
     $season_starts = isset($_POST['season_start']) ? $_POST['season_start'] : [];
     $season_ends   = isset($_POST['season_end']) ? $_POST['season_end'] : [];
@@ -876,6 +894,8 @@ function tcc_save_master_settings() {
         'inclusions' => $inclusions,
         'exclusions' => $exclusions,
         'payment_terms' => $payment_terms,
+        'dest_note' => $dest_note,
+        'company_details' => $company_details,
         'seasons' => $seasons
     );
     update_option('tcc_master_settings', $master_data);
@@ -1022,58 +1042,63 @@ function tcc_load_quote_payments() {
     $data = json_decode($post->post_content, true);
     $grand_total = floatval($data['grand_total']);
     
+    // Fetch original tax rates to reverse-calculate the exact waiver
+    $gst_pct = isset($data['summary']['gst_pct']) ? floatval($data['summary']['gst_pct']) / 100 : 0.05;
+    $pt_pct = isset($data['summary']['pt_pct']) ? floatval($data['summary']['pt_pct']) / 100 : 0;
+    $pg_pct = isset($data['summary']['pg_pct']) ? floatval($data['summary']['pg_pct']) / 100 : 0;
+    
     $payments = get_post_meta($post_id, 'tcc_payments', true);
     if(!is_array($payments)) $payments = [];
     
     $status = get_post_meta($post_id, 'tcc_lead_status', true);
 
-    $total_paid_agency = 0;
+    $total_paid = 0; // Agency Bank
+    $vendor_paid = 0;
+    $tax_waiver = 0;
     $total_refunded = 0;
-    $total_discount = 0;
-    $total_vendor_direct = 0; 
     $total_actual_pg = 0; 
     $has_refund = false;
 
-    foreach($payments as $p) { 
+    foreach($payments as &$p) { 
         $pg_fee = isset($p['pg_fee']) ? floatval($p['pg_fee']) : 0;
+        $amt = floatval($p['amount']);
+        
         if (isset($p['method']) && $p['method'] === 'Refund') {
-            $total_refunded += floatval($p['amount']);
+            $total_refunded += $amt;
             $has_refund = true;
-        } elseif (isset($p['method']) && $p['method'] === 'Discount') {
-            $total_discount += floatval($p['amount']);
-        } elseif (isset($p['method']) && $p['method'] === 'Customer Paid Vendor') {
-            $total_vendor_direct += floatval($p['amount']);
+        } elseif (isset($p['method']) && $p['method'] === 'Direct to Vendor') {
+            $vendor_paid += $amt;
+            // Mathematical reversal: GST on base + PT/PG applied on (Base + GST)
+            $waiver = ($amt * $gst_pct) + ($amt * (1 + $gst_pct) * ($pt_pct + $pg_pct));
+            $tax_waiver += $waiver;
+            $p['waiver_calculated'] = $waiver; // Send to JS dashboard
         } else {
-            $total_paid_agency += floatval($p['amount']); 
+            $total_paid += $amt; 
             $total_actual_pg += $pg_fee; 
         }
     }
     
     $is_cancelled = ($has_refund || $status === 'Canceled');
-    $retained_income = max(0, $total_paid_agency - $total_refunded);
+    $retained_income = max(0, $total_paid - $total_refunded);
     
-    $gst_pct = isset($data['summary']['gst_pct']) ? floatval($data['summary']['gst_pct']) : 5;
-    $M = 1 + ($gst_pct / 100);
-    $gst_savings = $total_vendor_direct - ($total_vendor_direct / $M);
+    // Balance reduces by Agency Payment + Vendor Payment + The Waived Taxes
+    $balance = $is_cancelled ? 0 : max(0, $grand_total - $total_paid - $vendor_paid - $tax_waiver);
+    $net_in_bank = $total_paid - $total_actual_pg; 
 
-    $effective_grand_total = $grand_total - $total_discount - $gst_savings;
-    
-    $balance = $is_cancelled ? 0 : max(0, $effective_grand_total - $total_paid_agency - $total_vendor_direct);
-    
-    $net_in_bank = $total_paid_agency - $total_actual_pg; 
+    // NEW: Calculate Vendor Direct Balance (mathematically stripping GST, PT, and PG)
+    $vendor_direct_balance = $is_cancelled ? 0 : max(0, $balance / ( (1 + $gst_pct) * (1 + $pt_pct + $pg_pct) ));
 
     wp_send_json_success(array(
-        'original_grand_total' => $grand_total,
-        'grand_total' => $effective_grand_total,
-        'total_discount' => $total_discount,
-        'total_vendor_direct' => $total_vendor_direct,
-        'gst_savings' => $gst_savings,
-        'total_paid' => $total_paid_agency,
+        'grand_total' => $grand_total,
+        'total_paid' => $total_paid,
+        'vendor_paid' => $vendor_paid,
+        'tax_waiver' => $tax_waiver,
         'total_actual_pg' => $total_actual_pg,
         'net_in_bank' => $net_in_bank,
         'total_refunded' => $total_refunded,
         'retained_income' => $retained_income,
         'balance' => $balance,
+        'vendor_direct_balance' => round($vendor_direct_balance, 2), // <--- Added Variable
         'is_cancelled' => $is_cancelled,
         'payments' => $payments
     ));

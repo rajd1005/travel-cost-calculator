@@ -305,3 +305,21 @@
         max-width: 100% !important;
     }
 }
+
+/* --- TABLE RESPONSIVE SCROLL FOR SMALL SCREENS --- */
+.tcc-table-responsive {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+    width: 100%;
+    display: block;
+}
+
+.tcc-table-responsive table {
+    min-width: 600px; /* Forces horizontal scroll on devices smaller than 600px */
+    width: 100%;
+}
+
+/* Ensure description columns don't stretch indefinitely but still look good */
+.tcc-table-responsive table td {
+    white-space: normal; 
+}

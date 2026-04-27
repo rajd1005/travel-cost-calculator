@@ -576,7 +576,7 @@ jQuery(document).ready(function($) {
 
     let liveCalcTimeout;
     $('#tcc-calc-form').on('input change', 'input:not(.tcc-day-desc), select, textarea', function(e) {
-        if(e.target.id === 'tcc_calculate_btn' || e.target.id === 'client_name' || e.target.id === 'client_phone' || e.target.id === 'client_email' || e.target.id === 'calc_edit_quote_select' || e.target.id === 'calc_quote_search') return;
+        if(e.target.id === 'tcc_calculate_btn' || e.target.id === 'client_name' || e.target.id === 'client_phone' || e.target.id === 'client_email') return;
         if(e.target.id !== 'total_pax' && e.target.id !== 'child_pax' && e.target.id !== 'child_6_12_pax' && e.target.id !== 'calc_pickup') {
             triggerLiveCalculation();
         }
@@ -725,7 +725,7 @@ jQuery(document).ready(function($) {
             url: tcc_ajax_obj.ajax_url, type: 'POST',
             data: $(this).serialize() + '&action=tcc_calculate_trip&generate_link=1',
             success: function(response) {
-                btn.text($('#edit_quote_id').val() ? 'Update Quote Link' : 'Generate Quote Link').prop('disabled', false);
+                btn.text('Generate Quote Link').prop('disabled', false);
                 if(response.success) {
                     window.tccLastQuoteData = response.data;
                     $('#tcc_generated_link').val(response.data.permalink);
@@ -1024,10 +1024,11 @@ jQuery(document).ready(function($) {
         }
         
         msg += `\n*Pricing Summary:*\n`;
+        msg += `Per Person (Excl. GST): ${pp_base}\n`;
         msg += `Total Base (${pax_count} Pax): ${total_base}\n`;
         msg += `GST (${gst_pct}%): ${gst}\n`;
         if(d.discount_amount > 0) msg += `(Note: A discount of ${discount} was applied to your base price)\n`;
-        msg += `\n*Total Package Value:* ${total}\n`;
+        msg += `\n*Total Quote:* ${total}\n`;
         msg += `*Per Person (Inc. GST):* ${pp_gst}\n\n`;
 
         msg += `*View Detailed Itinerary, Receipts & Quote here:*\n${link}`;
@@ -1534,41 +1535,22 @@ jQuery(document).ready(function($) {
     // --- BOOKING & PAYMENTS MANAGER LOGIC ---
     window.tccAllQuotes = [];
 
-    function renderQuotesDropdown(filterText = '', filterType = 'both') {
+    function renderQuotesDropdown(filterText = '') {
         let term = filterText.toLowerCase();
+        let $selPmt = $('#pmt_quote_select');
         
-        if (filterType === 'both' || filterType === 'pmt') {
-            let $selPmt = $('#pmt_quote_select');
-            if($selPmt.length > 0) {
-                $selPmt.empty().append('<option value="">-- Select Quote/Booking --</option>');
-                $.each(window.tccAllQuotes, function(i, q) {
-                    let searchStr = `${q.title} ${q.c_name} ${q.c_phone} ${q.c_email}`.toLowerCase();
-                    if(term === '' || searchStr.includes(term)) {
-                        let details = [];
-                        if(q.c_name) details.push(q.c_name);
-                        if(q.c_phone) details.push(q.c_phone);
-                        let label = q.title + (details.length ? ' [' + details.join(' | ') + ']' : ' [No Client Details]');
-                        $selPmt.append($('<option></option>').val(q.id).text(label));
-                    }
-                });
-            }
-        }
-
-        if (filterType === 'both' || filterType === 'calc') {
-            let $selCalc = $('#calc_edit_quote_select');
-            if($selCalc.length > 0) {
-                $selCalc.empty().append('<option value="">-- Create New Quote --</option>');
-                $.each(window.tccAllQuotes, function(i, q) {
-                    let searchStr = `${q.title} ${q.c_name} ${q.c_phone} ${q.c_email}`.toLowerCase();
-                    if(term === '' || searchStr.includes(term)) {
-                        let details = [];
-                        if(q.c_name) details.push(q.c_name);
-                        if(q.c_phone) details.push(q.c_phone);
-                        let label = q.title + (details.length ? ' [' + details.join(' | ') + ']' : '');
-                        $selCalc.append($('<option></option>').val(q.id).text(label));
-                    }
-                });
-            }
+        if($selPmt.length > 0) {
+            $selPmt.empty().append('<option value="">-- Select Quote/Booking --</option>');
+            $.each(window.tccAllQuotes, function(i, q) {
+                let searchStr = `${q.title} ${q.c_name} ${q.c_phone} ${q.c_email}`.toLowerCase();
+                if(term === '' || searchStr.includes(term)) {
+                    let details = [];
+                    if(q.c_name) details.push(q.c_name);
+                    if(q.c_phone) details.push(q.c_phone);
+                    let label = q.title + (details.length ? ' [' + details.join(' | ') + ']' : ' [No Client Details]');
+                    $selPmt.append($('<option></option>').val(q.id).text(label));
+                }
+            });
         }
     }
 
@@ -1576,140 +1558,13 @@ jQuery(document).ready(function($) {
         $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_load_quotes_list' }, function(res) {
             if(res.success) {
                 window.tccAllQuotes = res.data;
-                renderQuotesDropdown($('#pmt_quote_search').length ? $('#pmt_quote_search').val() : '', 'pmt');
-                renderQuotesDropdown($('#calc_quote_search').length ? $('#calc_quote_search').val() : '', 'calc');
+                renderQuotesDropdown($('#pmt_quote_search').length ? $('#pmt_quote_search').val() : '');
             }
         });
     }
 
-    $('#calc_quote_search').on('input', function() {
-        renderQuotesDropdown($(this).val(), 'calc');
-    });
-
-    $('#calc_edit_quote_select').on('change', function() {
-        let qid = $(this).val();
-        if(!qid) {
-            $('#tcc-calc-form')[0].reset();
-            $('#edit_quote_id').val('');
-            $('#tcc_calculate_btn').text('Generate Quote Link');
-            $('#transport-wrapper').empty();
-            $('#night-stay-wrapper').empty();
-            $('#addons-wrapper').empty();
-            
-            addStayRow(); 
-            addTransportRow(); 
-            
-            $('#day-wise-wrapper').empty();
-            $('#live_error').hide();
-            $('#tcc_link_wrapper').hide();
-            setTimeout(triggerLiveCalculation, 100);
-            return;
-        }
-
-        $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_get_full_quote_data', quote_id: qid }, function(res) {
-            if(res.success) {
-                let d = res.data.summary;
-                let r = res.data.raw; 
-                
-                $('#edit_quote_id').val(qid);
-                $('#tcc_calculate_btn').text('Update Quote Link');
-
-                $('#client_name').val(d.client_name || '');
-                $('#client_phone').val(d.client_phone || '');
-                $('#client_email').val(d.client_email || '');
-                $('#calc_destination').val(d.destination).trigger('change');
-                
-                setTimeout(() => {
-                    $('#start_date').val(d.start_date);
-                    $('#total_pax').val(d.pax);
-                    $('#child_pax').val(d.child);
-                    $('#child_6_12_pax').val(d.child_6_12 || 0);
-                    $('#total_days').val(d.days).data('prev-days', d.days);
-                    $('#no_of_rooms').val(d.rooms);
-                    $('#extra_beds').val(d.extra_beds);
-                    
-                    $('#calc_pickup').val(d.pickup);
-                    $('#calc_pickup_custom').val(r.pickup_custom || '');
-                    $('#calc_drop_custom').val(r.drop_custom || '');
-                    $('#calc_drop').val(d.drop || d.pickup);
-                    
-                    $('#calc_hotel_cat').val(d.hotel_cat).trigger('change');
-
-                    $('#quote_inclusions_editor').html(d.inclusions || '');
-                    $('#quote_inclusions').val(d.inclusions || '');
-                    $('#quote_exclusions_editor').html(d.exclusions || '');
-                    $('#quote_exclusions').val(d.exclusions || '');
-                    $('#quote_payment_terms_editor').html(d.payment_terms || '');
-                    $('#quote_payment_terms').val(d.payment_terms || '');
-                    
-                    $('#transport-wrapper').empty();
-                    if(r && r.transports) {
-                        r.transports.forEach((veh, i) => { 
-                            let tDays = (r.trans_days && r.trans_days[i]) ? r.trans_days[i] : d.days;
-                            let tPick = (r.trans_pickups && r.trans_pickups[i]) ? r.trans_pickups[i] : d.pickup;
-                            let customRate = (r.trans_custom_rates && r.trans_custom_rates[i] !== undefined) ? r.trans_custom_rates[i] : '';
-                            let customTotal = (r.trans_custom_totals && r.trans_custom_totals[i] !== undefined) ? r.trans_custom_totals[i] : '';
-                            addTransportRow(veh, r.trans_qtys[i], tDays, tPick, customRate, customTotal); 
-                        });
-                    }
-                    
-                    $('#night-stay-wrapper').empty();
-                    if(r && r.stay_places) {
-                        r.stay_places.forEach((place, i) => { 
-                            let cat = (r.stay_categories && r.stay_categories[i]) ? r.stay_categories[i] : d.hotel_cat;
-                            addStayRow(place, cat, r.stay_hotels[i], r.stay_nights[i]); 
-                        });
-                    } else if (d.stays) {
-                        d.stays.forEach((stay) => { addStayRow(stay.place, stay.category, '', stay.nights); }); 
-                    }
-
-                    $('#addons-wrapper').empty();
-                    if(r && r.addon_names && r.addon_names.length > 0) {
-                        r.addon_names.forEach((name, i) => { 
-                            let price = (r.addon_prices && r.addon_prices[i]) ? r.addon_prices[i] : 0;
-                            let type = (r.addon_types && r.addon_types[i]) ? r.addon_types[i] : 'flat';
-                            addAddonRow(name, price, type); 
-                        });
-                    }
-
-                    if(d.itinerary) {
-                        $('#total_days').trigger('input');
-                        setTimeout(() => {
-                            $('#day-wise-wrapper .tcc-day-row').each(function(i) {
-                                if(d.itinerary[i]) $(this).find('.tcc-day-input').val(d.itinerary[i]);
-                                if(r.itinerary_stay_place && r.itinerary_stay_place[i]) {
-                                    $(this).find('.tcc-day-stay-place').val(r.itinerary_stay_place[i]);
-                                }
-                                if(r.itinerary_desc && r.itinerary_desc[i]) {
-                                    $(this).find('.tcc-day-desc').val(r.itinerary_desc[i]);
-                                    $(this).find('.tcc-rte-editor').html(r.itinerary_desc[i]);
-                                }
-                                if(r.itinerary_image && r.itinerary_image[i]) {
-                                    $(this).find('.tcc-day-image').val(r.itinerary_image[i]);
-                                    $(this).find('.tcc-day-img-preview').attr('src', r.itinerary_image[i]).show();
-                                    $(this).find('.tcc-upload-img-btn').text('Change Image');
-                                }
-                            });
-                        }, 500);
-                    }
-
-                    if(r) {
-                        $('#calc_override_profit').val(r.override_profit || '');
-                        $('#calc_manual_pp_override').val(r.manual_pp_override || '');
-                        $('select[name="discount_1_type"]').val(r.d1_type || 'none');
-                        $('input[name="discount_1_value"]').val(r.d1_val || 0);
-                        $('select[name="discount_2_type"]').val(r.d2_type || 'none');
-                        $('input[name="discount_2_value"]').val(r.d2_val || 0);
-                    }
-
-                    triggerLiveCalculation();
-                }, 500); 
-            }
-        });
-    });
-
     $('#pmt_quote_search').on('input', function() {
-        renderQuotesDropdown($(this).val(), 'pmt');
+        renderQuotesDropdown($(this).val());
         $('#pmt_dashboard, #pmt_quote_actions, #pmt_edit_client_wrapper').hide();
     });
 
@@ -1759,41 +1614,7 @@ jQuery(document).ready(function($) {
         }
     });
 
-    // DUPLICATE QUOTE LOGIC
-    $('#pmt_duplicate_quote_btn').on('click', function() {
-        let qid = $('#pmt_quote_select').val();
-        if(!qid) return;
-        
-        if(!confirm("Duplicate this quote to create a new Option?\n\n(Note: Payments and status will NOT be copied to the new quote.)")) return;
-        
-        let btn = $(this);
-        let oldText = btn.text();
-        btn.text('⏳ Copying...').prop('disabled', true);
-        
-        $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_duplicate_quote', quote_id: qid }, function(res) {
-            btn.text(oldText).prop('disabled', false);
-            if(res.success) {
-                alert(res.data.message);
-                
-                // Reload list and jump back to the calculator automatically
-                $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_load_quotes_list' }, function(res2) {
-                    if(res2.success) {
-                        window.tccAllQuotes = res2.data;
-                        renderQuotesDropdown('', 'both');
-                        
-                        if($('#calc_edit_quote_select').length > 0) {
-                            $('#calc_edit_quote_select').val(res.data.new_id).trigger('change');
-                            $('html, body').animate({ scrollTop: $('#calc_edit_quote_select').offset().top - 50 }, 500);
-                        }
-                    }
-                });
-            } else {
-                alert(res.data || "Error duplicating quote.");
-            }
-        });
-    });
-
-    // EMAIL PROMPT LOGIC FOR SETTINGS DASHBOARD
+    // EMAIL PROMPT LOGIC
     $('#pmt_email_quote_btn').on('click', function() {
         let qid = $('#pmt_quote_select').val();
         if(!qid) return;
@@ -1858,18 +1679,6 @@ jQuery(document).ready(function($) {
         $('#pmt_edit_client_wrapper').slideDown();
     });
 
-    $('#pmt_full_edit_btn').on('click', function() {
-        let qid = $('#pmt_quote_select').val();
-        if(!qid) return;
-        
-        if($('#calc_edit_quote_select').length > 0) {
-            $('#calc_edit_quote_select').val(qid).trigger('change');
-            $('html, body').animate({ scrollTop: $('#calc_edit_quote_select').offset().top - 50 }, 500);
-        } else {
-            alert("Please open the Calculator page and use the 'Load Quote to Edit' dropdown at the top.");
-        }
-    });
-
     $('#cancel_edit_client_btn').on('click', function() {
         $('#pmt_edit_client_wrapper').slideUp();
     });
@@ -1893,8 +1702,7 @@ jQuery(document).ready(function($) {
                 $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_load_quotes_list' }, function(res2) {
                     if(res2.success) {
                         window.tccAllQuotes = res2.data;
-                        renderQuotesDropdown($('#pmt_quote_search').length ? $('#pmt_quote_search').val() : '', 'pmt');
-                        renderQuotesDropdown($('#calc_quote_search').length ? $('#calc_quote_search').val() : '', 'calc');
+                        renderQuotesDropdown($('#pmt_quote_search').length ? $('#pmt_quote_search').val() : '');
                         $('#pmt_quote_select').val(qid).trigger('change');
                     }
                 });
@@ -1917,13 +1725,7 @@ jQuery(document).ready(function($) {
     $('#pmt_method').on('change', function() {
         let btn = $('#tcc-add-payment-form button[type="submit"]');
         if($(this).val() === 'Refund') {
-            btn.text('Process Refund').css({'background': '#dc2626', 'border-color': '#b91c1c', 'color': '#fff'});
-        } else if($(this).val() === 'Discount') {
-            btn.text('Apply Discount').css({'background': '#0284c7', 'border-color': '#0369a1', 'color': '#fff'});
-            $('#pmt_pg_fee').val(0); // Typically no PG fee for a discount
-        } else if($(this).val() === 'Customer Paid Vendor') {
-            btn.text('Log Vendor Direct').css({'background': '#d97706', 'border-color': '#b45309', 'color': '#fff'});
-            $('#pmt_pg_fee').val(0); // No PG fee for direct vendor
+            btn.text('Process Refund').css({'background': '#dc2626', 'border-color': '#b91c1c'});
         } else {
             let btnText = $('#pmt_edit_id').val() ? 'Update Record' : 'Add Record';
             btn.text(btnText).removeAttr('style');
@@ -1945,43 +1747,44 @@ jQuery(document).ready(function($) {
                     $('#pmt_balance_val').parent().find('div:first').text('CANCELLATION INCOME');
                     $('#pmt_balance_val').text(formatINR(res.data.retained_income)).css('color', '#16a34a');
                 } else {
-                    let exemptions = '';
-                    if(res.data.total_discount > 0) exemptions += `<span style="font-size:11px; color:#0284c7;">- ${formatINR(res.data.total_discount)} (Discount)</span><br>`;
-                    if(res.data.gst_savings > 0) exemptions += `<span style="font-size:11px; color:#16a34a;">- ${formatINR(res.data.gst_savings)} (GST Exemption)</span><br>`;
-                    
-                    $('#pmt_total_val').html(`${formatINR(res.data.original_grand_total)} <br>${exemptions}<strong style="font-size:14px; color:#0f172a;">Net Pkg: ${formatINR(res.data.grand_total)}</strong>`);
-                    
+                    $('#pmt_total_val').text(formatINR(res.data.grand_total));
                     $('#pmt_received_val').parent().find('div:first').text('AGENCY RECEIVED');
-                    let vendorDirectHtml = res.data.total_vendor_direct > 0 ? `<br><span style="font-size:11px; color:#d97706;">+ ${formatINR(res.data.total_vendor_direct)} (Vendor Direct)</span>` : '';
-                    $('#pmt_received_val').html(`${formatINR(res.data.total_paid)}${vendorDirectHtml}<br><span style="font-size:11px; color:#64748b; font-weight:normal;">Net in Bank: ${formatINR(res.data.net_in_bank)}</span>`).css('color', '#16a34a');
+                    $('#pmt_received_val').html(`${formatINR(res.data.total_paid)}<br><span style="font-size:11px; color:#64748b; font-weight:normal;">Net in Bank: ${formatINR(res.data.net_in_bank)}</span>`).css('color', '#16a34a');
+                    $('#pmt_balance_val').parent().find('div:first').text('BALANCE DUE');
                     
-                    $('#pmt_balance_val').parent().find('div:first').text('BALANCE DUE (TO AGENCY)');
-                    $('#pmt_balance_val').text(formatINR(res.data.balance)).css('color', '#dc2626');
+                    let balanceHtml = formatINR(res.data.balance);
+                    if (res.data.vendor_paid > 0) {
+                        balanceHtml += `<br><span style="font-size:10px; color:#d97706; font-weight:normal; line-height:1.2; display:inline-block; margin-top:4px;">Vendor Direct: ${formatINR(res.data.vendor_paid)}<br>Tax Waiver: -${formatINR(res.data.tax_waiver)}</span>`;
+                    }
+                    $('#pmt_balance_val').html(balanceHtml).css('color', '#dc2626');
                 }
 
                 let phtml = '';
                 if(res.data.payments.length > 0) {
-                    phtml += `<table style="width:100%; border-collapse:collapse; font-size:12px; text-align:left;">
+                    phtml += `<table style="width:100%; min-width:700px; border-collapse:collapse; font-size:12px; text-align:left;">
                         <tr style="background:#f1f5f9; border-bottom:1px solid #e2e8f0;">
                             <th style="padding:8px;">Date</th><th style="padding:8px;">Gross Amt</th><th style="padding:8px; color:#dc2626;">PG Cut</th><th style="padding:8px; color:#16a34a;">Net Bank</th><th style="padding:8px;">Method</th><th style="padding:8px;">Ref</th><th style="padding:8px; text-align:right;">Action</th>
                         </tr>`;
                     $.each(res.data.payments, function(i, p) {
                         let isRefund = (p.method === 'Refund');
-                        let isDiscount = (p.method === 'Discount');
-                        let isVendorDirect = (p.method === 'Customer Paid Vendor');
-                        let amtColor = isRefund ? '#dc2626' : (isDiscount ? '#0284c7' : (isVendorDirect ? '#d97706' : '#16a34a'));
-                        let amtPrefix = isRefund || isDiscount ? '-' : '';
+                        let isVendor = (p.method === 'Direct to Vendor');
+                        let amtColor = isRefund ? '#dc2626' : (isVendor ? '#d97706' : '#16a34a');
+                        let amtPrefix = isRefund ? '-' : '';
                         
                         let pgFee = p.pg_fee ? parseFloat(p.pg_fee) : 0;
-                        let netBank = (isDiscount || isVendorDirect) ? 0 : parseFloat(p.amount) - pgFee;
-                        let netBankStr = (isDiscount || isVendorDirect) ? '-' : amtPrefix + formatINR(netBank);
+                        let netBank = parseFloat(p.amount) - pgFee;
+                        
+                        let methodCell = p.method;
+                        if (isVendor) {
+                            methodCell = `Direct to Vendor<br><span style="font-size:10px; color:#16a34a; font-weight:bold;">+ Tax Waiver: ${formatINR(p.waiver_calculated)}</span>`;
+                        }
 
                         phtml += `<tr style="border-bottom:1px solid #f1f5f9;">
                             <td style="padding:8px;">${p.date}</td>
                             <td style="padding:8px; font-weight:bold; color:${amtColor};">${amtPrefix}${formatINR(p.amount)}</td>
                             <td style="padding:8px; color:#dc2626;">${pgFee > 0 ? '-' + formatINR(pgFee) : '-'}</td>
-                            <td style="padding:8px; font-weight:bold; color:#16a34a;">${netBankStr}</td>
-                            <td style="padding:8px;">${p.method}</td>
+                            <td style="padding:8px; font-weight:bold; color:#16a34a;">${isVendor ? '-' : amtPrefix + formatINR(netBank)}</td>
+                            <td style="padding:8px;">${methodCell}</td>
                             <td style="padding:8px; color:#64748b;">${p.ref}</td>
                             <td style="padding:8px; text-align:right;">
                                 <button type="button" class="edit-payment-btn" data-id="${p.id}" data-date="${p.date}" data-amt="${p.amount}" data-pg="${pgFee}" data-method="${p.method}" data-ref="${p.ref}" style="background:none; border:none; color:#0284c7; cursor:pointer; text-decoration:underline; margin-right:8px;">Edit</button>
@@ -2010,14 +1813,8 @@ jQuery(document).ready(function($) {
         $('#pmt_ref').val(p.ref);
         
         let btn = $('#tcc-add-payment-form button[type="submit"]');
-        if(p.method === 'Refund') {
-            btn.text('Process Refund').css({'background': '#dc2626', 'border-color': '#b91c1c', 'color': '#fff'});
-        } else if(p.method === 'Discount') {
-            btn.text('Update Discount').css({'background': '#0284c7', 'border-color': '#0369a1', 'color': '#fff'});
-        } else if(p.method === 'Customer Paid Vendor') {
-            btn.text('Update Vendor Direct').css({'background': '#d97706', 'border-color': '#b45309', 'color': '#fff'});
-        } else {
-            btn.text('Update Record').removeAttr('style');
+        if(p.method !== 'Refund') {
+            btn.text('Update Record');
         }
         $('#pmt_cancel_edit_btn').show();
         $('html, body').animate({ scrollTop: $('#tcc-add-payment-wrapper').offset().top - 50 }, 300);

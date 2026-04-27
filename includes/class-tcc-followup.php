@@ -111,6 +111,8 @@ function tcc_render_followup_dashboard() {
 
     ob_start(); ?>
 
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+
     <style>
         /* Base Desktop Table Styles */
         .tcc-lead-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 13px; margin-bottom: 15px; }
@@ -129,8 +131,40 @@ function tcc_render_followup_dashboard() {
         .lead-email-btn:hover { background: #bfdbfe; }
         .lead-expired { opacity: 0.6; background: #fef2f2 !important; }
 
-        /* Compact Mobile Responsive Card Transformation */
+        /* Compact Filter Bar Styles */
+        .tcc-filter-bar {
+            display: flex;
+            gap: 15px;
+            background: #f8fafc;
+            padding: 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+        .tcc-filter-bar > * {
+            flex: 1; /* Distributes space equally among the 3 inputs on large screens */
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            font-size: 13px;
+            box-sizing: border-box;
+            min-width: 0;
+            background: #fff;
+        }
+
+        /* Compact Mobile Responsive Transformations */
         @media screen and (max-width: 768px) {
+            /* Stack filter bar vertically */
+            .tcc-filter-bar {
+                flex-direction: column;
+                gap: 10px;
+                padding: 15px;
+            }
+            .tcc-filter-bar > * {
+                width: 100%;
+            }
+
             .tcc-lead-table thead { display: none; }
             .tcc-lead-table, .tcc-lead-table tbody, .tcc-lead-table tr, .tcc-lead-table td { display: block; width: 100%; box-sizing: border-box; }
             
@@ -164,32 +198,23 @@ function tcc_render_followup_dashboard() {
 
     <div class="tcc-wrapper tcc-form" style="max-width: 100%;">
         <div class="tcc-card" style="margin-bottom:0; background:transparent; box-shadow:none; border:none; padding:0;">
+            
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px; flex-wrap:wrap; gap:10px;">
                 <h2 style="margin:0; color:#0f172a; font-size:18px;">Quotation Follow-up Dashboard</h2>
-                
                 <div style="font-size:13px; font-weight:bold; color:#334155; background:#e2e8f0; padding:6px 12px; border-radius:20px;">
                     Showing <span id="lead_row_count" style="color:#b93b59;">0</span> lead(s)
                 </div>
             </div>
 
-              <div style="display:flex; flex-wrap:wrap; gap:20px; background:#f8fafc; padding:15px; border:1px solid #cbd5e1; border-radius:6px; margin-bottom: 15px;">
+            <div class="tcc-filter-bar">
+                <input type="text" id="lead_search" placeholder="Search Phone, Email, Name...">
                 
-                <div style="flex: 2; display: flex; flex-direction: column; justify-content: flex-end; gap: 15px; min-width: 250px;">
-                    <input type="text" id="lead_search" placeholder="Search Phone, Email, Name..." style="padding:8px 12px; border-radius:4px; border:1px solid #ccc; font-size:13px; width:100%; box-sizing:border-box;">
-                    
-                    <select id="lead_view_filter" style="padding:8px 12px; border-radius:4px; border:1px solid #ccc; font-size:13px; width:100%; box-sizing:border-box;">
-                        <option value="active">View Active Leads Only</option>
-                        <option value="all">View All (Including Completed & Expired)</option>
-                    </select>
-                </div>
+                <select id="lead_view_filter">
+                    <option value="active">View Active Leads Only</option>
+                    <option value="all">View All (Including Completed & Expired)</option>
+                </select>
 
-                <div style="flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 200px;">
-                    <label style="font-size:12px; color:#475569; font-weight:bold; margin-bottom:-2px;">Quote Date:</label>
-                    <input type="date" id="lead_date_from" style="padding:8px 12px; border-radius:4px; border:1px solid #ccc; font-size:13px; width:100%; box-sizing:border-box;" title="Start Date">
-                    <div style="font-size:12px; color:#475569; padding-left:2px;">to</div>
-                    <input type="date" id="lead_date_to" style="padding:8px 12px; border-radius:4px; border:1px solid #ccc; font-size:13px; width:100%; box-sizing:border-box;" title="End Date">
-                </div>
-                
+                <input type="text" id="lead_date_range" placeholder="Filter by Date Range...">
             </div>
 
             <table class="tcc-lead-table" id="tcc_leads_table">
@@ -282,9 +307,22 @@ function tcc_render_followup_dashboard() {
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
     <script>
     jQuery(document).ready(function($) {
         
+        // Initialize the Date Range Picker
+        flatpickr("#lead_date_range", {
+            mode: "range",
+            dateFormat: "Y-m-d",
+            onChange: function(selectedDates, dateStr, instance) {
+                // Render table immediately when a valid range or single date is picked
+                currentPage = 1;
+                renderTable();
+            }
+        });
+
         let currentPage = 1;
         const rowsPerPage = 10;
 
@@ -292,8 +330,23 @@ function tcc_render_followup_dashboard() {
             let $rows = $('#tcc_leads_tbody tr.lead-row');
             let viewFilter = $('#lead_view_filter').val();
             let searchTerm = $('#lead_search').val().toLowerCase();
-            let dateFrom = $('#lead_date_from').val();
-            let dateTo = $('#lead_date_to').val();
+            
+            // Extract the dates from the range picker input
+            let dateRangeStr = $('#lead_date_range').val();
+            let dateFrom = '';
+            let dateTo = '';
+            
+            if (dateRangeStr) {
+                if (dateRangeStr.indexOf(' to ') !== -1) {
+                    let parts = dateRangeStr.split(' to ');
+                    dateFrom = parts[0];
+                    dateTo = parts[1];
+                } else {
+                    // Single date selected
+                    dateFrom = dateRangeStr;
+                    dateTo = dateRangeStr;
+                }
+            }
             
             let $filteredRows = $rows.filter(function() {
                 let show = true;
@@ -337,7 +390,7 @@ function tcc_render_followup_dashboard() {
 
         $('#tcc_prev_page').click(function() { if(currentPage > 1) { currentPage--; renderTable(); } });
         $('#tcc_next_page').click(function() { currentPage++; renderTable(); });
-        $('#lead_view_filter, #lead_search, #lead_date_from, #lead_date_to').on('input change', function() { currentPage = 1; renderTable(); });
+        $('#lead_view_filter, #lead_search').on('input change', function() { currentPage = 1; renderTable(); });
 
         renderTable();
 

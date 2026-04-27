@@ -4,6 +4,9 @@ get_header();
 
 $quote_data = json_decode($post->post_content, true);
 
+// Get Global Settings
+$global_settings = get_option('tcc_global_settings', array());
+
 // Indian Currency Formatter for PHP
 function tcc_format_inr($num) {
     $num = round($num, 2);
@@ -83,55 +86,40 @@ $d = $quote_data['summary'];
 $raw_stays = isset($quote_data['raw']['itinerary_stay_place']) ? $quote_data['raw']['itinerary_stay_place'] : [];
 
 // ----------------------------------------------------------------------
-// PAYMENT & INVOICE LOGIC (With Dynamic GST Recalculation)
+// PAYMENT & INVOICE LOGIC (With Refund & Vendor Handling)
 // ----------------------------------------------------------------------
 $payments = get_post_meta($post->ID, 'tcc_payments', true);
 if(!is_array($payments)) $payments = [];
 $status = get_post_meta($post->ID, 'tcc_lead_status', true);
 
-$total_paid_agency = 0;
-$total_vendor_direct = 0;
+$gst_pct = isset($d['gst_pct']) ? floatval($d['gst_pct']) / 100 : 0.05;
+$pt_pct = isset($d['pt_pct']) ? floatval($d['pt_pct']) / 100 : 0;
+$pg_pct = isset($d['pg_pct']) ? floatval($d['pg_pct']) / 100 : 0;
+
+$total_paid = 0;
 $total_refunded = 0;
-$total_dynamic_discount = 0;
+$vendor_paid = 0;
+$tax_waiver = 0;
 $has_refund = false;
 
 foreach($payments as $p) { 
-    $method = isset($p['method']) ? $p['method'] : '';
-    if ($method === 'Refund') {
-        $total_refunded += floatval($p['amount']);
+    $amt = floatval($p['amount']);
+    if (isset($p['method']) && $p['method'] === 'Refund') {
+        $total_refunded += $amt;
         $has_refund = true;
-    } elseif ($method === 'Discount') {
-        $total_dynamic_discount += floatval($p['amount']);
-    } elseif ($method === 'Customer Paid Vendor') {
-        $total_vendor_direct += floatval($p['amount']);
+    } elseif (isset($p['method']) && $p['method'] === 'Direct to Vendor') {
+        $vendor_paid += $amt;
+        $tax_waiver += ($amt * $gst_pct) + ($amt * (1 + $gst_pct) * ($pt_pct + $pg_pct));
     } else {
-        $total_paid_agency += floatval($p['amount']); 
+        $total_paid += $amt; 
     }
 }
 
 $is_cancelled = ($has_refund || $status === 'Canceled');
-$retained_income = max(0, $total_paid_agency - $total_refunded);
+$retained_income = max(0, $total_paid - $total_refunded);
 
 $grand_total = floatval($quote_data['grand_total']);
-$static_discount = isset($d['discount_amount']) ? floatval($d['discount_amount']) : 0;
-
-$total_discount = $static_discount + $total_dynamic_discount;
-
-// Dynamic Tax Recalculation based on Vendor Direct Exemption
-$gst_pct_disp = isset($d['gst_pct']) ? floatval($d['gst_pct']) : 5;
-$M = 1 + ($gst_pct_disp / 100);
-
-$display_base = $grand_total / $M;
-$original_gst = $grand_total - $display_base;
-
-// Calculate GST Savings from Vendor Direct
-$gst_savings = $total_vendor_direct - ($total_vendor_direct / $M);
-$actual_gst = max(0, $original_gst - $gst_savings);
-
-// Effective Grand Total is lowered by Discounts and GST Savings
-$effective_grand_total = $grand_total - $total_discount - $gst_savings;
-
-$balance = $is_cancelled ? 0 : max(0, $effective_grand_total - $total_paid_agency - $total_vendor_direct);
+$balance = $is_cancelled ? 0 : max(0, $grand_total - $total_paid - $vendor_paid - $tax_waiver);
 
 $doc_title = "Travel Quotation";
 $doc_color = "#0f172a"; 
@@ -208,40 +196,38 @@ $txt_inc = "*Included in Package*\n" . tcc_text_bullets($d['inclusions'], '✅')
 $txt_exc = "*Excluded from Package*\n" . tcc_text_bullets($d['exclusions'], '❌');
 $txt_pay = "*Payment Terms*\n" . tcc_text_bullets($d['payment_terms'], '💳');
 
+$gst_pct_disp = isset($d['gst_pct']) ? $d['gst_pct'] : 5;
+$pp_gst = isset($quote_data['per_person_with_gst']) ? $quote_data['per_person_with_gst'] : ($grand_total / max(1, $d['pax']));
 $pax_count = max(1, $d['pax']);
-$pp_gst = isset($quote_data['per_person_with_gst']) ? $quote_data['per_person_with_gst'] : ($grand_total / $pax_count);
+
+$discount_amt = floatval($d['discount_amount']);
+$final_base = $quote_data['per_person'] * $pax_count;
+$initial_base = $final_base + $discount_amt;
 
 $txt_price = "*Pricing Summary*\n";
-$txt_price .= "Total Base ({$pax_count} Pax): " . tcc_format_inr($display_base) . "\n";
 
-if($total_discount > 0) {
-    $txt_price .= "Discount Applied: -" . tcc_format_inr($total_discount) . "\n";
+if($discount_amt > 0) {
+    $txt_price .= "Total Base ({$pax_count} Pax): " . tcc_format_inr($initial_base) . "\n";
+    $txt_price .= "Discount Applied: -" . tcc_format_inr($discount_amt) . "\n";
+} else {
+    $txt_price .= "Total Base ({$pax_count} Pax): " . tcc_format_inr($final_base) . "\n";
 }
 
-$txt_price .= "GST ({$gst_pct_disp}%): " . tcc_format_inr($actual_gst) . "\n";
-if($gst_savings > 0) {
-    $txt_price .= "(Tax Savings on Vendor Direct: -" . tcc_format_inr($gst_savings) . ")\n";
-}
-
+$txt_price .= "GST ({$gst_pct_disp}%): " . tcc_format_inr($quote_data['gst']) . "\n";
 $txt_price .= "------------------------\n";
 $txt_price .= "*Total Package Value:* " . tcc_format_inr($grand_total) . "\n";
 
-if ($total_discount > 0 || $gst_savings > 0) {
-    $txt_price .= "*Net Payable Value:* " . tcc_format_inr($effective_grand_total) . "\n";
-}
-
 if ($is_cancelled) {
     $txt_price .= "\n*BOOKING CANCELLED*\n";
-    $txt_price .= "Agency Received: " . tcc_format_inr($total_paid_agency) . "\n";
+    $txt_price .= "Total Paid: " . tcc_format_inr($total_paid) . "\n";
     $txt_price .= "Amount Refunded: " . tcc_format_inr($total_refunded) . "\n";
     $txt_price .= "Cancellation Charges: " . tcc_format_inr($retained_income) . "\n";
-} elseif ($total_paid_agency > 0 || $total_vendor_direct > 0) {
+} elseif ($total_paid > 0 || $vendor_paid > 0) {
     $txt_price .= "\n------------------------\n";
-    if($total_paid_agency > 0) {
-        $txt_price .= "*Agency Received:* " . tcc_format_inr($total_paid_agency) . "\n";
-    }
-    if($total_vendor_direct > 0) {
-        $txt_price .= "*Paid Direct to Vendor:* " . tcc_format_inr($total_vendor_direct) . "\n";
+    $txt_price .= "*Agency Received:* " . tcc_format_inr($total_paid) . "\n";
+    if ($vendor_paid > 0) {
+        $txt_price .= "*Direct Vendor Payments:* " . tcc_format_inr($vendor_paid) . "\n";
+        $txt_price .= "*Vendor Discount:* -" . tcc_format_inr($tax_waiver) . "\n";
     }
     $txt_price .= "*Balance Due:* " . tcc_format_inr($balance);
 }
@@ -327,6 +313,8 @@ if ($is_cancelled) {
     .tcc-inc-red h4 { color: #b91c1c; }
     .tcc-inc-yellow { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
     .tcc-inc-yellow h4 { color: #b45309; }
+    .tcc-inc-grey { background: #f8fafc; border: 1px solid #cbd5e1; color: #334155; }
+    .tcc-inc-grey h4 { color: #0f172a; }
     
     /* RTE Dynamic Content Styling */
     .tcc-rte-display ul, .tcc-rte-display ol { margin: 5px 0 10px; padding-left: 20px; }
@@ -499,15 +487,19 @@ if ($is_cancelled) {
                             </thead>
                             <tbody>
                                 <?php foreach($payments as $p): 
-                                    $method = isset($p['method']) ? $p['method'] : '';
-                                    if ($method === 'Refund') { $amt_color = '#dc2626'; $amt_prefix = '-'; }
-                                    elseif ($method === 'Discount') { $amt_color = '#0284c7'; $amt_prefix = '-'; }
-                                    elseif ($method === 'Customer Paid Vendor') { $amt_color = '#d97706'; $amt_prefix = ''; }
-                                    else { $amt_color = '#16a34a'; $amt_prefix = ''; }
+                                    $is_refund = (isset($p['method']) && $p['method'] === 'Refund');
+                                    $is_vendor = (isset($p['method']) && $p['method'] === 'Direct to Vendor');
+                                    $amt_color = $is_refund ? '#dc2626' : ($is_vendor ? '#d97706' : '#16a34a');
+                                    $amt_prefix = $is_refund ? '-' : '';
                                 ?>
                                 <tr style="border-bottom:1px solid #f8fafc;">
                                     <td data-label="Date" style="padding:12px 15px; color:#334155;"><?php echo esc_html(date('d M y', strtotime($p['date']))); ?></td>
-                                    <td data-label="Method" style="padding:12px 15px; color:#64748b;"><?php echo esc_html($method); ?></td>
+                                    <td data-label="Method" style="padding:12px 15px; color:#64748b;">
+                                        <?php echo esc_html($p['method']); ?>
+                                        <?php if($is_vendor): ?>
+                                            <br><span style="font-size:10px; color:#16a34a; font-weight:bold;">+ Vendor Discount: <?php echo tcc_format_inr(($p['amount'] * $gst_pct) + ($p['amount'] * (1 + $gst_pct) * ($pt_pct + $pg_pct))); ?></span>
+                                        <?php endif; ?>
+                                    </td>
                                     <td data-label="Amount" style="padding:12px 15px; text-align:right; font-weight:bold; color:<?php echo $amt_color; ?>;"><?php echo $amt_prefix . tcc_format_inr($p['amount']); ?></td>
                                 </tr>
                                 <?php endforeach; ?>
@@ -521,47 +513,33 @@ if ($is_cancelled) {
                 <div class="tcc-price-box" style="background:#fff; padding:25px; border-radius:8px; border:1px solid var(--tcc-border); box-shadow:0 1px 4px rgba(0,0,0,0.04);">
                     <h4 style="color:var(--tcc-text-dark); font-size:17px; margin:0 0 18px 0; border-bottom:1px solid #f1f5f9; padding-bottom:12px;">Pricing Summary</h4>
                     
-                    <div class="tcc-price-row"><span>Total Base (<?php echo esc_html($pax_count); ?> Pax):</span> <strong style="color:#0f172a;"><?php echo tcc_format_inr($display_base); ?></strong></div>
-                    
-                    <?php if($total_discount > 0): ?>
-                        <div class="tcc-price-row" style="color:#dc2626;"><span>Discount Applied:</span> <strong>-<?php echo tcc_format_inr($total_discount); ?></strong></div>
+                    <?php if($discount_amt > 0): ?>
+                        <div class="tcc-price-row"><span>Total Base (<?php echo esc_html($pax_count); ?> Pax):</span> <strong style="color:#0f172a;"><?php echo tcc_format_inr($initial_base); ?></strong></div>
+                        <div class="tcc-price-row" style="color:#dc2626;"><span>Discount Applied:</span> <strong>-<?php echo tcc_format_inr($discount_amt); ?></strong></div>
+                    <?php else: ?>
+                        <div class="tcc-price-row"><span>Total Base (<?php echo esc_html($pax_count); ?> Pax):</span> <strong style="color:#0f172a;"><?php echo tcc_format_inr($final_base); ?></strong></div>
                     <?php endif; ?>
                     
-                    <div class="tcc-price-row">
-                        <span>GST (<?php echo $gst_pct_disp; ?>%):
-                        <?php if($gst_savings > 0): ?>
-                            <br><span style="font-size:11px; color:#16a34a; font-weight:normal;">(Tax Savings on Vendor Direct: -<?php echo tcc_format_inr($gst_savings); ?>)</span>
-                        <?php endif; ?>
-                        </span> 
-                        <strong style="color:#0f172a;"><?php echo tcc_format_inr($actual_gst); ?></strong>
-                    </div>
+                    <div class="tcc-price-row"><span>GST (<?php echo $gst_pct_disp; ?>%):</span> <strong style="color:#0f172a;"><?php echo tcc_format_inr($quote_data['gst']); ?></strong></div>
 
                     <div class="tcc-price-total">
                         <span>Total Package Value:</span>
                         <span style="<?php echo $is_cancelled ? 'text-decoration:line-through; opacity:0.5;' : ''; ?>"><?php echo tcc_format_inr($grand_total); ?></span>
                     </div>
 
-                    <?php if($total_discount > 0 || $gst_savings > 0): ?>
-                        <div class="tcc-price-total" style="border-top:none; padding-top:0; margin-top:5px; font-size:22px; color:#0f172a;">
-                            <span>Net Payable Value:</span>
-                            <span><?php echo tcc_format_inr($effective_grand_total); ?></span>
-                        </div>
-                    <?php endif; ?>
-
                     <?php if($is_cancelled): ?>
                         <div style="margin-top:20px; padding-top:15px; border-top:2px solid #fee2e2;">
-                            <div class="tcc-price-row"><span>Agency Received:</span> <strong style="color:#15803d;"><?php echo tcc_format_inr($total_paid_agency); ?></strong></div>
+                            <div class="tcc-price-row"><span>Total Received:</span> <strong style="color:#15803d;"><?php echo tcc_format_inr($total_paid); ?></strong></div>
                             <div class="tcc-price-row" style="color:#dc2626;"><span>Amount Refunded:</span> <strong><?php echo tcc_format_inr($total_refunded); ?></strong></div>
                             <div class="tcc-price-row" style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--tcc-border); font-size:17px; font-weight:700; color:#16a34a;"><span>Cancellation Charges:</span> <span><?php echo tcc_format_inr($retained_income); ?></span></div>
                             <div class="tcc-status-box" style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca;">STATUS: CANCELLED</div>
                         </div>
-                    <?php elseif($total_paid_agency > 0 || $total_vendor_direct > 0): ?>
+                    <?php elseif($total_paid > 0 || $vendor_paid > 0): ?>
                         <div style="margin-top:20px; padding-top:15px; border-top:2px solid var(--tcc-border);">
-                            <?php if($total_paid_agency > 0): ?>
-                                <div class="tcc-price-row" style="color:#16a34a; font-weight:700; font-size:16px;"><span>Agency Received:</span> <span><?php echo tcc_format_inr($total_paid_agency); ?></span></div>
-                            <?php endif; ?>
-                            <?php if($total_vendor_direct > 0): ?>
-                                <div class="tcc-price-row" style="color:#d97706; font-weight:700; font-size:16px;"><span>Paid Direct to Vendor:</span> <span><?php echo tcc_format_inr($total_vendor_direct); ?></span></div>
+                            <div class="tcc-price-row" style="color:#16a34a; font-weight:700; font-size:16px;"><span>Agency Received:</span> <span><?php echo tcc_format_inr($total_paid); ?></span></div>
+                            <?php if($vendor_paid > 0): ?>
+                                <div class="tcc-price-row" style="color:#d97706; font-size:15px;"><span>Paid to Vendors:</span> <span><?php echo tcc_format_inr($vendor_paid); ?></span></div>
+                                <div class="tcc-price-row" style="color:#16a34a; font-size:15px;"><span>Vendor Discount:</span> <span>-<?php echo tcc_format_inr($tax_waiver); ?></span></div>
                             <?php endif; ?>
                             <div class="tcc-status-box" style="background:<?php echo $balance > 0 ? '#fef2f2' : '#f0fdf4'; ?>; color:<?php echo $balance > 0 ? '#dc2626' : '#15803d'; ?>; border:1px solid <?php echo $balance > 0 ? '#fecaca' : '#bbf7d0'; ?>; display:flex; justify-content:space-between; align-items:center;">
                                 <span><?php echo $balance > 0 ? 'Balance Due:' : 'Balance Cleared:'; ?></span>
@@ -613,13 +591,36 @@ if ($is_cancelled) {
                 </h4>
                 <?php echo tcc_render_bullets($d['payment_terms']); ?>
             </div>
+
+            <?php if(!empty($d['dest_note'])): ?>
+            <div class="tcc-inc-card tcc-inc-grey">
+                <h4>
+                    <span>📌 Important Note</span>
+                </h4>
+                <?php echo tcc_render_bullets($d['dest_note']); ?>
+            </div>
+            <?php endif; ?>
+
+            <?php if(!empty($d['company_details'])): ?>
+            <div class="tcc-inc-card tcc-inc-grey">
+                <h4>
+                    <span>🏢 Company Details</span>
+                </h4>
+                <?php echo tcc_render_bullets($d['company_details']); ?>
+            </div>
+            <?php endif; ?>
         </div>
+
+        <?php if(!empty($global_settings['company_banner'])): ?>
+        <div style="margin-top: 35px; text-align: center; border-top: 2px dashed var(--tcc-border); padding-top: 20px;">
+            <img src="<?php echo esc_url($global_settings['company_banner']); ?>" style="max-width: 100%; height: auto; object-fit: contain; border-radius: var(--tcc-radius);">
+        </div>
+        <?php endif; ?>
 
     </div>
 </div>
 
-<div id="tcc_hidden_pdf_template" style="display:none; width: 800px; padding: 25px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; background: #fff; box-sizing: border-box;">
-    
+<div id="tcc_hidden_pdf_template" style="display:none; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; background: #fff;">
     <div style="text-align: center; border-bottom: 2px solid <?php echo $doc_color; ?>; padding-bottom: 15px; margin-bottom: 20px;">
         <h1 style="margin: 0 0 5px; font-size: 24px; color: <?php echo $doc_color; ?>; text-transform: uppercase;">SOULFUL TOUR & TRAVELS</h1>
         <div style="font-size: 12px; color: #64748b; margin-bottom: 10px;">GSTIN: 19AXIPD7432L1Z5</div>
@@ -739,43 +740,37 @@ if ($is_cancelled) {
         <table style="width: 100%; border-collapse: collapse; font-size: 14px; border: 1px solid #e2e8f0;">
             <tr>
                 <td style="padding: 10px 12px; border: 1px solid #e2e8f0; background: #f8fafc; width: 60%;">Total Base (<?php echo esc_html($pax_count); ?> Pax)</td>
-                <td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold; width: 40%;"><?php echo tcc_format_inr($display_base); ?></td>
+                <td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold; width: 40%;"><?php echo tcc_format_inr($discount_amt > 0 ? $initial_base : $final_base); ?></td>
             </tr>
-            <?php if($total_discount > 0): ?>
+            <?php if($discount_amt > 0): ?>
             <tr>
                 <td style="padding: 10px 12px; border: 1px solid #e2e8f0; background: #fef2f2; color: #dc2626;">Discount Applied</td>
-                <td style="padding: 10px 12px; border: 1px solid #e2e8f0; background: #fef2f2; text-align: right; font-weight: bold; color: #dc2626;">-<?php echo tcc_format_inr($total_discount); ?></td>
+                <td style="padding: 10px 12px; border: 1px solid #e2e8f0; background: #fef2f2; text-align: right; font-weight: bold; color: #dc2626;">-<?php echo tcc_format_inr($discount_amt); ?></td>
             </tr>
             <?php endif; ?>
             <tr>
-                <td style="padding: 10px 12px; border: 1px solid #e2e8f0; background: #f8fafc;">GST (<?php echo $gst_pct_disp; ?>%)
-                <?php if($gst_savings > 0): ?><br><span style="font-size:11px; color:#16a34a;">(Tax Savings on Vendor Direct: -<?php echo tcc_format_inr($gst_savings); ?>)</span><?php endif; ?>
-                </td>
-                <td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold;"><?php echo tcc_format_inr($actual_gst); ?></td>
+                <td style="padding: 10px 12px; border: 1px solid #e2e8f0; background: #f8fafc;">GST (<?php echo $gst_pct_disp; ?>%)</td>
+                <td style="padding: 10px 12px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold;"><?php echo tcc_format_inr($quote_data['gst']); ?></td>
             </tr>
             <tr>
                 <td style="padding: 15px 12px; border: 1px solid #e2e8f0; background: #f1f5f9; font-size: 17px; font-weight: bold;">Total Package Value</td>
                 <td style="padding: 15px 12px; border: 1px solid #e2e8f0; background: #f1f5f9; text-align: right; font-size: 17px; font-weight: bold;"><?php echo tcc_format_inr($grand_total); ?></td>
             </tr>
-            <?php if($total_discount > 0 || $gst_savings > 0): ?>
-            <tr>
-                <td style="padding: 15px 12px; border: 1px solid #e2e8f0; background: #f1f5f9; font-size: 18px; font-weight: bold; color: #0f172a;">Net Payable Value</td>
-                <td style="padding: 15px 12px; border: 1px solid #e2e8f0; background: #f1f5f9; text-align: right; font-size: 18px; font-weight: bold; color: #0f172a;"><?php echo tcc_format_inr($effective_grand_total); ?></td>
-            </tr>
-            <?php endif; ?>
             <?php if($is_cancelled): ?>
                 <tr><td colspan="2" style="padding: 12px; border: 1px solid #e2e8f0; background: #fef2f2; color: #dc2626; text-align: center; font-weight: bold;">BOOKING CANCELLED</td></tr>
-            <?php elseif($total_paid_agency > 0 || $total_vendor_direct > 0): ?>
-                <?php if($total_paid_agency > 0): ?>
+            <?php elseif($total_paid > 0 || $vendor_paid > 0): ?>
                 <tr>
                     <td style="padding: 12px; border: 1px solid #e2e8f0; color: #16a34a; font-weight: bold;">Agency Received</td>
-                    <td style="padding: 12px; border: 1px solid #e2e8f0; color: #16a34a; text-align: right; font-weight: bold;"><?php echo tcc_format_inr($total_paid_agency); ?></td>
+                    <td style="padding: 12px; border: 1px solid #e2e8f0; color: #16a34a; text-align: right; font-weight: bold;"><?php echo tcc_format_inr($total_paid); ?></td>
                 </tr>
-                <?php endif; ?>
-                <?php if($total_vendor_direct > 0): ?>
+                <?php if($vendor_paid > 0): ?>
                 <tr>
-                    <td style="padding: 12px; border: 1px solid #e2e8f0; color: #d97706; font-weight: bold;">Paid Direct to Vendor</td>
-                    <td style="padding: 12px; border: 1px solid #e2e8f0; color: #d97706; text-align: right; font-weight: bold;"><?php echo tcc_format_inr($total_vendor_direct); ?></td>
+                    <td style="padding: 12px; border: 1px solid #e2e8f0; color: #d97706; font-weight: bold;">Direct Vendor Payments</td>
+                    <td style="padding: 12px; border: 1px solid #e2e8f0; color: #d97706; text-align: right; font-weight: bold;"><?php echo tcc_format_inr($vendor_paid); ?></td>
+                </tr>
+                <tr>
+                    <td style="padding: 12px; border: 1px solid #e2e8f0; color: #16a34a; font-weight: bold;">Vendor Discount Applied</td>
+                    <td style="padding: 12px; border: 1px solid #e2e8f0; color: #16a34a; text-align: right; font-weight: bold;">-<?php echo tcc_format_inr($tax_waiver); ?></td>
                 </tr>
                 <?php endif; ?>
                 <tr>
@@ -800,6 +795,26 @@ if ($is_cancelled) {
         <h4 style="margin: 0 0 10px; font-size: 15px; border-bottom: 1px solid #fde68a; padding-bottom: 6px;">💳 Payment Terms</h4>
         <?php echo tcc_render_bullets($d['payment_terms']); ?>
     </div>
+
+    <?php if(!empty($d['dest_note'])): ?>
+    <div class="pdf-avoid-break" style="margin-bottom: 20px; padding: 20px; border: 1px solid #cbd5e1; background: #f8fafc; color: #334155; border-radius: 6px; font-size: 13px;">
+        <h4 style="margin: 0 0 10px; font-size: 15px; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px;">📌 Important Note</h4>
+        <?php echo tcc_render_bullets($d['dest_note']); ?>
+    </div>
+    <?php endif; ?>
+
+    <?php if(!empty($d['company_details'])): ?>
+    <div class="pdf-avoid-break" style="margin-bottom: 20px; padding: 20px; border: 1px solid #cbd5e1; background: #f8fafc; color: #334155; border-radius: 6px; font-size: 13px;">
+        <h4 style="margin: 0 0 10px; font-size: 15px; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px;">🏢 Company Details</h4>
+        <?php echo tcc_render_bullets($d['company_details']); ?>
+    </div>
+    <?php endif; ?>
+
+    <?php if(!empty($global_settings['company_banner'])): ?>
+    <div class="pdf-avoid-break" style="margin-top: 30px; text-align: center;">
+        <img src="<?php echo esc_url($global_settings['company_banner']); ?>" style="max-width: 100%; height: auto; object-fit: contain;">
+    </div>
+    <?php endif; ?>
 
 </div>
 
@@ -919,32 +934,14 @@ function tccDownloadPDF(btn) {
                 body { 
                     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
                     color: #333; 
-                    margin: 0 auto;
-                    max-width: 800px;
                     background: #fff;
+                    margin: 0;
                 }
                 
-                /* FIX FOR GIANT ICONS: Replicate WordPress Emoji CSS */
-                img.emoji {
-                    display: inline !important;
-                    border: none !important;
-                    box-shadow: none !important;
-                    height: 1em !important;
-                    width: 1em !important;
-                    margin: 0 0.07em !important;
-                    vertical-align: -0.1em !important;
-                    background: none !important;
-                    padding: 0 !important;
-                }
+                /* Simplify emojis to prevent rendering issues */
+                img.emoji { display: none !important; }
 
-                /* Backup fix for any other custom images placed inside headings */
-                h1 img, h2 img, h3 img, h4 img {
-                    max-height: 1.2em;
-                    width: auto;
-                    vertical-align: middle;
-                }
-                
-                /* CRITICAL: This tells the native browser NEVER to slice tables or headings in half */
+                /* Prevent awkward page breaks inside content blocks */
                 .pdf-avoid-break, tr, th, td, h3, img { 
                     page-break-inside: avoid !important; 
                     break-inside: avoid !important; 
@@ -959,22 +956,47 @@ function tccDownloadPDF(btn) {
                 .tcc-rte-display p { margin: 0 0 10px 0; }
                 .tcc-rte-display p:last-child { margin-bottom: 0; }
 
-                /* Print-specific layout rules */
+                /* CRITICAL PDF MARGIN & FRAME LOGIC */
                 @media print {
                     @page { 
-                        margin: 0 !important; /* Hides about:blank and default headers/footers in Chrome */
+                        /* Sets margin to 0 to completely disable browser Headers/Footers */
+                        margin: 0 !important; 
                         size: A4 portrait;
                     }
                     body { 
-                        padding: 15mm !important; /* Safely pushes the content away from the paper edge */
-                        max-width: 100% !important; 
                         margin: 0 !important;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+                    /* Global Border Frame Applied To Every PDF Page */
+                    .pdf-frame {
+                        position: fixed;
+                        top: 8mm; left: 8mm; right: 8mm; bottom: 8mm;
+                        border: 1px solid #94a3b8; 
+                        border-radius: 4px;
+                        z-index: -1;
+                        pointer-events: none;
                     }
                 }
             </style>
         </head>
         <body>
-            ${pdfContent}
+            <div class="pdf-frame"></div>
+            <table style="width: 100%; border: none; border-collapse: collapse;">
+                <thead>
+                    <tr><td style="height: 15mm; border: none; padding: 0;"></td></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="padding: 0 15mm; border: none; vertical-align: top;">
+                            ${pdfContent}
+                        </td>
+                    </tr>
+                </tbody>
+                <tfoot>
+                    <tr><td style="height: 15mm; border: none; padding: 0;"></td></tr>
+                </tfoot>
+            </table>
         </body>
         </html>
     `);

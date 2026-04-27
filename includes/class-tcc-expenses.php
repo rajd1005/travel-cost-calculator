@@ -133,7 +133,7 @@ function tcc_render_expense_calculator() {
                 </form>
                 
                 <h4 style="margin: 15px 0 8px; font-size:13px;">Expense History</h4>
-                <div id="ge_history_table" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; overflow:hidden; padding:15px; text-align:center; color:#64748b;">Loading expenses...</div>
+                <div id="ge_history_table" class="tcc-table-responsive" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; overflow-x:auto; padding:15px; text-align:center; color:#64748b;">Loading expenses...</div>
             </div>
         </div>
 
@@ -152,7 +152,7 @@ function tcc_render_expense_calculator() {
                     <button type="submit" class="tcc-btn-primary" style="margin:0; flex:1; min-width:80px;">Set Recurring</button>
                     <button type="button" id="ae_cancel_edit" class="tcc-btn-secondary" style="display:none; margin:0; flex:0.5; min-width:60px;">Cancel</button>
                 </form>
-                <div id="ae_history_table" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; overflow:hidden; margin-top:15px; padding:15px; text-align:center; color:#64748b;">Loading recurring setups...</div>
+                <div id="ae_history_table" class="tcc-table-responsive" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; overflow-x:auto; margin-top:15px; padding:15px; text-align:center; color:#64748b;">Loading recurring setups...</div>
             </div>
         </div>
 
@@ -197,6 +197,9 @@ function tcc_render_expense_calculator() {
                         </div>
                         <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:3px;">
                             <span>GST:</span> <strong id="bk_auto_gst">₹0.00</strong>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:3px; color:#16a34a;">
+                            <span>Tax Waiver (Vendor Direct):</span> <strong id="bk_auto_tax_waiver">-₹0.00</strong>
                         </div>
                         <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:bold; color:#dc2626; border-top:1px dashed #ccc; margin-top:4px; padding-top:4px;">
                             <span>Total Expected Cost:</span> <span id="bk_auto_total">₹0.00</span>
@@ -254,7 +257,7 @@ function tcc_render_expense_calculator() {
                             <label style="cursor:pointer; color:#475569;"><input type="checkbox" id="pt_is_investor"> 🏦 This partner is the Company Owner (Reimburse Everyday Expenses to them first)</label>
                         </div>
                     </form>
-                    <div id="pt_list_table" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; padding:10px; text-align:center;">Loading...</div>
+                    <div id="pt_list_table" class="tcc-table-responsive" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; padding:10px; overflow-x:auto; text-align:center;">Loading...</div>
                 </div>
 
                 <div class="tcc-card" style="border-left: 4px solid #10b981;">
@@ -269,7 +272,7 @@ function tcc_render_expense_calculator() {
                         <input type="number" id="cpl_amt" step="0.01" min="1" placeholder="Amt (₹)" required style="flex:1; min-width:80px;">
                         <button type="submit" class="tcc-btn-primary" style="margin:0; flex:1;">Add</button>
                     </form>
-                    <div id="cpl_list_table" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; padding:10px; max-height:165px; overflow-y:auto; text-align:center;">Loading...</div>
+                    <div id="cpl_list_table" class="tcc-table-responsive" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; padding:10px; max-height:165px; overflow-y:auto; overflow-x:auto; text-align:center;">Loading...</div>
                 </div>
             </div>
 
@@ -281,7 +284,7 @@ function tcc_render_expense_calculator() {
                         <a href="#" id="pt_filter_clear" style="font-size:11px; color:#dc2626; text-decoration:none; font-weight:bold;">Clear</a>
                     </div>
                 </div>
-                <div id="pt_ledger_table" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; overflow-x:auto; text-align:center;">Loading ledger...</div>
+                <div id="pt_ledger_table" class="tcc-table-responsive" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; overflow-x:auto; text-align:center;">Loading ledger...</div>
             </div>
         </div>
 
