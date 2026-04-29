@@ -86,7 +86,7 @@ $d = $quote_data['summary'];
 $raw_stays = isset($quote_data['raw']['itinerary_stay_place']) ? $quote_data['raw']['itinerary_stay_place'] : [];
 
 // ----------------------------------------------------------------------
-// PAYMENT & INVOICE LOGIC (With Refund & Vendor Handling)
+// PAYMENT & INVOICE LOGIC (With Refund, Vendor Handling, & Post-Quote Discount)
 // ----------------------------------------------------------------------
 $payments = get_post_meta($post->ID, 'tcc_payments', true);
 if(!is_array($payments)) $payments = [];
@@ -119,7 +119,11 @@ $is_cancelled = ($has_refund || $status === 'Canceled');
 $retained_income = max(0, $total_paid - $total_refunded);
 
 $grand_total = floatval($quote_data['grand_total']);
-$balance = $is_cancelled ? 0 : max(0, $grand_total - $total_paid - $vendor_paid - $tax_waiver);
+
+// NEW: Fetch Post Quote Discount
+$post_quote_discount = floatval(get_post_meta($post->ID, 'tcc_post_quote_discount', true));
+
+$balance = $is_cancelled ? 0 : max(0, $grand_total - $post_quote_discount - $total_paid - $vendor_paid - $tax_waiver);
 
 $doc_title = "Travel Quotation";
 $doc_color = "#0f172a"; 
@@ -217,6 +221,12 @@ $txt_price .= "GST ({$gst_pct_disp}%): " . tcc_format_inr($quote_data['gst']) . 
 $txt_price .= "------------------------\n";
 $txt_price .= "*Total Package Value:* " . tcc_format_inr($grand_total) . "\n";
 
+// NEW: Append Post-Quote Discount to WhatsApp copy string
+if ($post_quote_discount > 0) {
+    $txt_price .= "*Special Discount:* -" . tcc_format_inr($post_quote_discount) . "\n";
+    $txt_price .= "*Final Package Value:* " . tcc_format_inr($grand_total - $post_quote_discount) . "\n";
+}
+
 if ($is_cancelled) {
     $txt_price .= "\n*BOOKING CANCELLED*\n";
     $txt_price .= "Total Paid: " . tcc_format_inr($total_paid) . "\n";
@@ -259,16 +269,24 @@ if ($is_cancelled) {
     }
     
     /* Full width header */
+/* Letterhead Header Styles */
     .tcc-header { 
-        background: var(--tcc-primary); 
-        color: #fff; 
-        padding: 35px 5%; 
+        background: #ffffff; 
+        color: var(--tcc-text-dark); 
+        padding: 40px 5% 30px; 
         text-align: center; 
+        border-bottom: 4px solid var(--tcc-primary);
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
     }
+    .tcc-header h1 { margin: 0 0 5px; font-size: 28px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; color: var(--tcc-primary); }
+    .tcc-header h2 { margin: 0 0 15px; font-size: 14px; font-weight: 600; color: var(--tcc-text-light); letter-spacing: 0.5px; }
+    .tcc-header .badge { display: inline-block; background: var(--tcc-badge); padding: 6px 14px; border-radius: 4px; font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #fff;}
     
-    .tcc-header h1 { margin: 0 0 5px; font-size: 24px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }
-    .tcc-header h2 { margin: 0 0 2px; font-size: 16px; opacity: 0.9; font-weight: 500; }
-    .tcc-header .badge { display: inline-block; background: var(--tcc-badge); padding: 6px 14px; border-radius: 20px; font-size: 12px; margin-top: 10px; font-weight: 600; letter-spacing: 0.5px; }
+    .tcc-header-address { margin: 0 auto 20px; max-width: 800px; line-height: 1.5; color: #334155; }
+    .tcc-header-address .head-office { font-size: 15px; font-weight: 700; color: #0f172a; }
+    .tcc-header-address .corp-office { font-size: 12px; font-weight: 500; color: #64748b; margin-top: 4px; }
+    
+    .tcc-header-meta { display: flex; justify-content: space-between; align-items: flex-end; max-width: 1000px; margin: 25px auto 0; padding-top: 20px; border-top: 1px solid var(--tcc-border); text-align: left; flex-wrap: wrap; gap: 15px; }
 
     /* Full width body with horizontal padding */
     .tcc-body { padding: 30px 5%; max-width: 1200px; margin: 0 auto; background: var(--tcc-bg-card); box-shadow: 0 0 15px rgba(0,0,0,0.05); }
@@ -336,16 +354,30 @@ if ($is_cancelled) {
 <div class="tcc-container" id="tcc_web_view">
     <div class="WA-copy-feedback" id="tcc_copy_feedback">Copied to clipboard!</div>
     
-    <div class="tcc-header">
+<div class="tcc-header">
         <h1>SOULFUL TOUR & TRAVELS</h1>
         <h2>GSTIN: 19AXIPD7432L1Z5</h2>
-        <div class="badge"><?php echo $doc_title; ?></div>
-        <p style="margin-top:12px; font-size:15px; font-weight:500;">
-            Prepared for: <strong><?php echo isset($d['client_name']) && !empty($d['client_name']) ? esc_html($d['client_name']) : 'Valued Client'; ?></strong>
-            <?php if(isset($d['client_phone']) && !empty($d['client_phone'])): ?>
-                <br>📞 <?php echo esc_html($d['client_phone']); ?>
-            <?php endif; ?>
-        </p>
+        
+        <div class="tcc-header-address">
+            <div class="head-office">
+    📍 Operational Head Office<br>
+    <span style="padding-left: 22px;">Lake City Plaza, Karan Nagar Rd,Karan Nagar, Srinagar, Jammu and Kashmir 190010</span>
+</div>
+            <div class="corp-office">🏢 Corporate Office: Soulful Pathfinder, 505/S/A, Sirajmondal Road, Kanchrapara, 24 PGS (N), WB Kolkata -743145</div>
+        </div>
+
+        <div class="tcc-header-meta">
+            <div>
+                <span style="color:var(--tcc-text-light); text-transform:uppercase; font-size:11px; font-weight:700; display:block; margin-bottom:4px;">Prepared For</span>
+                <strong style="font-size: 16px; color: var(--tcc-text-dark);"><?php echo isset($d['client_name']) && !empty($d['client_name']) ? esc_html($d['client_name']) : 'Valued Client'; ?></strong>
+                <?php if(isset($d['client_phone']) && !empty($d['client_phone'])): ?>
+                    <div style="color: #64748b; font-size: 14px; margin-top: 2px;">📞 <?php echo esc_html($d['client_phone']); ?></div>
+                <?php endif; ?>
+            </div>
+            <div>
+                <div class="badge"><?php echo $doc_title; ?></div>
+            </div>
+        </div>
     </div>
 
     <div class="tcc-body">
@@ -527,6 +559,17 @@ if ($is_cancelled) {
                         <span style="<?php echo $is_cancelled ? 'text-decoration:line-through; opacity:0.5;' : ''; ?>"><?php echo tcc_format_inr($grand_total); ?></span>
                     </div>
 
+                    <?php if($post_quote_discount > 0): ?>
+                    <div class="tcc-price-row" style="color:#dc2626; margin-top:10px;">
+                        <span>Special Discount:</span> 
+                        <strong>-<?php echo tcc_format_inr($post_quote_discount); ?></strong>
+                    </div>
+                    <div class="tcc-price-total" style="padding-top:10px; margin-top:10px; font-size:22px; color:#15803d; border-top:none;">
+                        <span>Final Package Value:</span>
+                        <span><?php echo tcc_format_inr($grand_total - $post_quote_discount); ?></span>
+                    </div>
+                    <?php endif; ?>
+
                     <?php if($is_cancelled): ?>
                         <div style="margin-top:20px; padding-top:15px; border-top:2px solid #fee2e2;">
                             <div class="tcc-price-row"><span>Total Received:</span> <strong style="color:#15803d;"><?php echo tcc_format_inr($total_paid); ?></strong></div>
@@ -621,19 +664,32 @@ if ($is_cancelled) {
 </div>
 
 <div id="tcc_hidden_pdf_template" style="display:none; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; background: #fff;">
-    <div style="text-align: center; border-bottom: 2px solid <?php echo $doc_color; ?>; padding-bottom: 15px; margin-bottom: 20px;">
-        <h1 style="margin: 0 0 5px; font-size: 24px; color: <?php echo $doc_color; ?>; text-transform: uppercase;">SOULFUL TOUR & TRAVELS</h1>
-        <div style="font-size: 12px; color: #64748b; margin-bottom: 10px;">GSTIN: 19AXIPD7432L1Z5</div>
-        <div style="display: inline-block; background: <?php echo $badge_bg; ?>; color: #fff; padding: 5px 15px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-bottom: 15px;"><?php echo $doc_title; ?></div>
+<div style="text-align: center; border-bottom: 4px solid <?php echo $doc_color; ?>; padding-bottom: 20px; margin-bottom: 30px;">
+        <h1 style="margin: 0 0 5px; font-size: 28px; font-weight: 900; color: <?php echo $doc_color; ?>; text-transform: uppercase; letter-spacing: 1px;">SOULFUL TOUR & TRAVELS</h1>
+        <div style="font-size: 13px; font-weight: bold; color: #64748b; margin-bottom: 15px; letter-spacing: 0.5px;">GSTIN: 19AXIPD7432L1Z5</div>
         
-        <table style="width: 100%; border: none; font-size: 13px;">
+        <div style="margin-bottom: 20px; line-height: 1.5;">
+<div style="font-size: 14px; font-weight: bold; color: #0f172a;">
+    📍 Operational Head Office<br>
+    <span style="padding-left: 20px;">Lake City Plaza, Karan Nagar Rd, Karan Nagar, Srinagar, Jammu and Kashmir 190010</span>
+</div>
+            <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
+                🏢 Corporate Office: Soulful Pathfinder, 505/S/A, Sirajmondal Road, Kanchrapara, 24 PGS (N), WB Kolkata -743145
+            </div>
+        </div>
+
+        <table style="width: 100%; border-top: 1px solid #e2e8f0; padding-top: 15px; font-size: 13px; text-align: left;">
             <tr>
-                <td style="text-align: left; width: 50%;"><strong>Prepared For:</strong> <?php echo esc_html(isset($d['client_name']) && !empty($d['client_name']) ? $d['client_name'] : 'Valued Client'); ?></td>
-                <td style="text-align: right; width: 50%;"><strong>Date:</strong> <?php echo date('d M Y'); ?></td>
-            </tr>
-            <tr>
-                <td style="text-align: left; width: 50%;"><strong>Phone:</strong> <?php echo esc_html(isset($d['client_phone']) && !empty($d['client_phone']) ? $d['client_phone'] : 'N/A'); ?></td>
-                <td style="text-align: right; width: 50%;"><strong>Email:</strong> <?php echo esc_html(isset($d['client_email']) && !empty($d['client_email']) ? $d['client_email'] : 'N/A'); ?></td>
+                <td style="width: 50%; vertical-align: top;">
+                    <span style="color:#64748b; text-transform:uppercase; font-size:10px; font-weight:bold; display:block; margin-bottom:3px;">Prepared For</span>
+                    <strong style="font-size: 14px; color: #0f172a;"><?php echo esc_html(isset($d['client_name']) && !empty($d['client_name']) ? $d['client_name'] : 'Valued Client'); ?></strong><br>
+                    <?php if(isset($d['client_phone']) && !empty($d['client_phone'])) echo '<span style="color: #475569;">📞 ' . esc_html($d['client_phone']) . '</span><br>'; ?>
+                    <?php if(isset($d['client_email']) && !empty($d['client_email'])) echo '<span style="color: #475569;">📧 ' . esc_html($d['client_email']) . '</span>'; ?>
+                </td>
+                <td style="width: 50%; text-align: right; vertical-align: top;">
+                    <div style="display: inline-block; background: <?php echo $badge_bg; ?>; color: #fff; padding: 6px 16px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-bottom: 8px; text-transform: uppercase;"><?php echo $doc_title; ?></div><br>
+                    <span style="color: #64748b;"><strong>Date:</strong> <?php echo date('d M Y'); ?></span>
+                </td>
             </tr>
         </table>
     </div>
@@ -756,6 +812,18 @@ if ($is_cancelled) {
                 <td style="padding: 15px 12px; border: 1px solid #e2e8f0; background: #f1f5f9; font-size: 17px; font-weight: bold;">Total Package Value</td>
                 <td style="padding: 15px 12px; border: 1px solid #e2e8f0; background: #f1f5f9; text-align: right; font-size: 17px; font-weight: bold;"><?php echo tcc_format_inr($grand_total); ?></td>
             </tr>
+            
+            <?php if($post_quote_discount > 0): ?>
+            <tr>
+                <td style="padding: 10px 12px; border: 1px solid #e2e8f0; background: #fef2f2; color: #dc2626; font-weight: bold;">Special Discount</td>
+                <td style="padding: 10px 12px; border: 1px solid #e2e8f0; background: #fef2f2; text-align: right; font-weight: bold; color: #dc2626;">-<?php echo tcc_format_inr($post_quote_discount); ?></td>
+            </tr>
+            <tr>
+                <td style="padding: 15px 12px; border: 1px solid #e2e8f0; background: #f0fdf4; font-size: 18px; font-weight: bold; color:#15803d;">Final Package Value</td>
+                <td style="padding: 15px 12px; border: 1px solid #e2e8f0; background: #f0fdf4; text-align: right; font-size: 18px; font-weight: bold; color:#15803d;"><?php echo tcc_format_inr($grand_total - $post_quote_discount); ?></td>
+            </tr>
+            <?php endif; ?>
+
             <?php if($is_cancelled): ?>
                 <tr><td colspan="2" style="padding: 12px; border: 1px solid #e2e8f0; background: #fef2f2; color: #dc2626; text-align: center; font-weight: bold;">BOOKING CANCELLED</td></tr>
             <?php elseif($total_paid > 0 || $vendor_paid > 0): ?>
@@ -931,15 +999,23 @@ function tccDownloadPDF(btn) {
             <title>${docTitle}</title>
             <style>
                 /* Base styles for the isolated window */
-                body { 
-                    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
+body { 
+                    /* Added standard emoji fonts to the fallback list */
+                    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'; 
                     color: #333; 
                     background: #fff;
                     margin: 0;
                 }
                 
-                /* Simplify emojis to prevent rendering issues */
-                img.emoji { display: none !important; }
+/* Ensure icons/emojis are visible in the PDF */
+                img.emoji { 
+                    display: inline !important; 
+                    height: 1em !important; 
+                    width: 1em !important; 
+                    vertical-align: -0.1em !important; 
+                    border: none !important; 
+                    box-shadow: none !important; 
+                }
 
                 /* Prevent awkward page breaks inside content blocks */
                 .pdf-avoid-break, tr, th, td, h3, img { 

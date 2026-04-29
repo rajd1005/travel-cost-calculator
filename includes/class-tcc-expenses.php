@@ -128,6 +128,11 @@ function tcc_render_expense_calculator() {
                     <input type="text" id="ge_cat" list="tcc_cat_list" placeholder="-- Category (Select or Type) --" required style="flex:1.5; min-width:130px;">
                     <input type="text" id="ge_desc" placeholder="Details" style="flex:2; min-width:150px;">
                     <input type="number" id="ge_amt" step="0.01" min="1" placeholder="Amount (₹)" required style="flex:1; min-width:100px;">
+                    
+                    <select id="ge_paid_by" style="flex:1; min-width:120px;" title="Paid By">
+                        <option value="">Agency / Bank</option>
+                    </select>
+                    
                     <button type="submit" class="tcc-btn-primary" style="margin:0; flex:1; min-width:80px;">Add</button>
                     <button type="button" id="ge_cancel_edit" class="tcc-btn-secondary" style="display:none; margin:0; flex:0.5; min-width:60px;">Cancel</button>
                 </form>
@@ -149,6 +154,11 @@ function tcc_render_expense_calculator() {
                         <option value="monthly">Monthly</option>
                     </select>
                     <input type="number" id="ae_amt" step="0.01" min="1" placeholder="Amount (₹)" required style="flex:1; min-width:90px;">
+                    
+                    <select id="ae_paid_by" style="flex:1; min-width:120px;" title="Paid By">
+                        <option value="">Agency / Bank</option>
+                    </select>
+
                     <button type="submit" class="tcc-btn-primary" style="margin:0; flex:1; min-width:80px;">Set Recurring</button>
                     <button type="button" id="ae_cancel_edit" class="tcc-btn-secondary" style="display:none; margin:0; flex:0.5; min-width:60px;">Cancel</button>
                 </form>
@@ -253,9 +263,6 @@ function tcc_render_expense_calculator() {
                         <input type="number" id="pt_percent" step="0.01" min="0.01" max="100" placeholder="Share %" required style="flex:1; min-width:80px;">
                         <button type="submit" class="tcc-btn-primary" style="margin:0; flex:1;">Save</button>
                         <button type="button" id="pt_cancel_edit" class="tcc-btn-secondary" style="display:none; margin:0; flex:0.5;">Cancel</button>
-                        <div style="width:100%; margin-top:5px; font-size:12px;">
-                            <label style="cursor:pointer; color:#475569;"><input type="checkbox" id="pt_is_investor"> 🏦 This partner is the Company Owner (Reimburse Everyday Expenses to them first)</label>
-                        </div>
                     </form>
                     <div id="pt_list_table" class="tcc-table-responsive" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; padding:10px; overflow-x:auto; text-align:center;">Loading...</div>
                 </div>
@@ -264,12 +271,18 @@ function tcc_render_expense_calculator() {
                     <div class="tcc-card-title">2. Add Custom Daily Profit/Loss</div>
                     <form id="frm_custom_pl" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
                         <input type="date" id="cpl_date" required style="flex:1; min-width:110px;">
-                        <select id="cpl_type" required style="flex:1; min-width:90px;">
+                        <select id="cpl_type" required style="flex:1; min-width:110px;">
                             <option value="profit">Profit (+)</option>
                             <option value="loss">Loss (-)</option>
+                            <option value="investment" style="color:#d97706; font-weight:bold;">Capital Inv (+)</option>
                         </select>
                         <input type="text" id="cpl_desc" placeholder="Details" required style="flex:2; min-width:130px;">
                         <input type="number" id="cpl_amt" step="0.01" min="1" placeholder="Amt (₹)" required style="flex:1; min-width:80px;">
+                        
+                        <select id="cpl_partner" style="flex:1; min-width:120px; display:none;" title="Select Partner">
+                            <option value="">-- Partner --</option>
+                        </select>
+                        
                         <button type="submit" class="tcc-btn-primary" style="margin:0; flex:1;">Add</button>
                     </form>
                     <div id="cpl_list_table" class="tcc-table-responsive" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; padding:10px; max-height:165px; overflow-y:auto; overflow-x:auto; text-align:center;">Loading...</div>

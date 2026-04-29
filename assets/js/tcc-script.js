@@ -1,5 +1,32 @@
 jQuery(document).ready(function($) {
     
+    // === INTERCONNECTIVITY EVENT LISTENERS ===
+    // Listen for Settings Updates
+    $(document).on('tcc_data_updated', function(e, source) {
+        if (source === 'tcc-script') return; // Don't trigger if this script made the change
+        
+        $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_get_sync_data' }, function(res) {
+            if (res.success) {
+                window.tccMasterData = res.data.master;
+                window.tccGlobalSettings = res.data.global;
+                rebuildDestinationDropdowns();
+                updateSettingsDropdowns();
+                updateCalculatorDropdowns();
+                triggerLiveCalculation(); // Recalculate everything instantly
+            }
+        });
+    });
+
+    // Listen for Financial/Booking Updates
+    $(document).on('tcc_finances_updated', function(e, source) {
+        if (source === 'tcc-script') return;
+        loadPaymentQuotes(); // Refresh dropdowns
+        if ($('#pmt_quote_select').val()) {
+            refreshPaymentDashboard(); // Refresh active dashboard
+        }
+    });
+    // =========================================
+
     // --- WIZARD NAVIGATION LOGIC ---
     let currentStep = 1;
     const totalSteps = 2;
@@ -727,6 +754,7 @@ jQuery(document).ready(function($) {
             success: function(response) {
                 btn.text('Generate Quote Link').prop('disabled', false);
                 if(response.success) {
+                    $(document).trigger('tcc_finances_updated', ['tcc-script']); // ADDED
                     window.tccLastQuoteData = response.data;
                     $('#tcc_generated_link').val(response.data.permalink);
                     $('#tcc_open_btn').attr('href', response.data.permalink);
@@ -1639,6 +1667,7 @@ jQuery(document).ready(function($) {
                 c_email: newEmail.trim()
             }, function(res) {
                 if(res.success) {
+                    $(document).trigger('tcc_finances_updated', ['tcc-script']); // ADDED
                     quoteData.c_email = newEmail.trim(); 
                     sendEmailAJAX(qid, $btn, originalText); 
                 } else {
@@ -1698,6 +1727,7 @@ jQuery(document).ready(function($) {
         $.post(tcc_ajax_obj.ajax_url, data, function(res) {
             btn.text('Save Details').prop('disabled', false);
             if(res.success) {
+                $(document).trigger('tcc_finances_updated', ['tcc-script']); // ADDED
                 $('#pmt_edit_client_wrapper').slideUp();
                 $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_load_quotes_list' }, function(res2) {
                     if(res2.success) {
@@ -1716,8 +1746,160 @@ jQuery(document).ready(function($) {
         
         $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_delete_quote', quote_id: qid }, function(res) {
             if(res.success) {
+                $(document).trigger('tcc_finances_updated', ['tcc-script']); // ADDED
                 $('#pmt_dashboard, #pmt_quote_actions, #pmt_edit_client_wrapper').hide();
                 loadPaymentQuotes();
+            }
+        });
+    });
+
+    // DUPLICATE QUOTE LOGIC
+    $('#pmt_duplicate_quote_btn').on('click', function() {
+        let qid = $('#pmt_quote_select').val();
+        if(!qid) return;
+        if(!confirm("Are you sure you want to duplicate this quote? It will create a fresh copy with a new Link.")) return;
+
+        let btn = $(this);
+        let oldText = btn.text();
+        btn.text('Duplicating...').prop('disabled', true);
+
+        $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_duplicate_quote', quote_id: qid }, function(res) {
+            btn.text(oldText).prop('disabled', false);
+            if(res.success) {
+                $(document).trigger('tcc_finances_updated', ['tcc-script']); // ADDED
+                alert(res.data.message);
+                
+                // Refresh the quote list and automatically select the new duplicate!
+                $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_load_quotes_list' }, function(res2) {
+                    if(res2.success) {
+                        window.tccAllQuotes = res2.data;
+                        renderQuotesDropdown($('#pmt_quote_search').length ? $('#pmt_quote_search').val() : '');
+                        $('#pmt_quote_select').val(res.data.new_id).trigger('change');
+                    }
+                });
+            } else {
+                alert("Error: " + res.data);
+            }
+        }).fail(function() {
+            btn.text(oldText).prop('disabled', false);
+            alert("Server error. Could not duplicate.");
+        });
+    });
+
+    // LOAD SAVED QUOTE TO CALCULATOR LOGIC
+    $('#pmt_load_edit_btn').on('click', function() {
+        let qid = $('#pmt_quote_select').val();
+        if(!qid) return;
+
+        if(!confirm("This will clear your current calculator form and load the selected quote. Continue?")) return;
+
+        let btn = $(this);
+        let oldText = btn.text();
+        btn.text('Loading...').prop('disabled', true);
+
+        $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_get_full_quote_data', quote_id: qid }, function(res) {
+            btn.text(oldText).prop('disabled', false);
+            if(res.success) {
+                let d = res.data.summary;
+                let r = res.data.raw;
+
+                // 1. Set the internal Edit ID so saving UPDATES this quote
+                $('#edit_quote_id').val(qid);
+
+                // 2. Client & Basics
+                $('#client_name').val(d.client_name || '');
+                $('#client_phone').val(d.client_phone || '');
+                $('#client_email').val(d.client_email || '');
+                $('#calc_destination').val(d.destination).trigger('change');
+
+                // Wait 800ms for Destination dropdowns (Hotels/Vehicles) to load via AJAX
+                setTimeout(() => {
+                    $('#start_date').val(d.start_date || '');
+                    $('#total_pax').val(d.pax || 1);
+                    $('#child_6_12_pax').val(d.child_6_12 || 0);
+                    $('#child_pax').val(d.child || 0);
+                    $('#total_days').val(d.days || 1);
+                    $('#no_of_rooms').val(d.rooms || 1);
+                    $('#extra_beds').val(d.extra_beds || 0);
+                    $('#calc_hotel_cat').val(d.hotel_cat || '');
+
+                    // Extract raw pickup/drop locations from strings like "Airport (Srinagar)"
+                    let p_base = (d.pickup && d.pickup.includes('(')) ? d.pickup.split('(')[1].replace(')','') : (d.pickup || '');
+                    let d_base = (d.drop && d.drop.includes('(')) ? d.drop.split('(')[1].replace(')','') : (d.drop || '');
+                    $('#calc_pickup').val(p_base.trim());
+                    $('#calc_drop').val(d_base.trim());
+                    $('#calc_pickup_custom').val(r.pickup_custom || '');
+                    $('#calc_drop_custom').val(r.drop_custom || '');
+
+                    // 3. Clear Repeaters safely
+                    $('#day-wise-wrapper, #night-stay-wrapper, #transport-wrapper, #addons-wrapper').empty();
+
+                    // 4. Populate Itinerary Days
+                    if (d.itinerary) {
+                        window.tccTempDayData = {
+                            val: d.itinerary,
+                            stay: d.itinerary_stay_places || r.itinerary_stay_place || [],
+                            desc: d.itinerary_desc || [],
+                            img: d.itinerary_image || []
+                        };
+                        $('#total_days').trigger('input'); // Generates the day rows dynamically
+                    }
+
+                    // 5. Populate Stays
+                    if (r.stay_places && r.stay_places.length > 0) {
+                        r.stay_places.forEach((place, i) => {
+                            addStayRow(place, r.stay_categories[i], r.stay_hotels[i], r.stay_nights[i]);
+                        });
+                    } else {
+                        addStayRow();
+                    }
+
+                    // 6. Populate Transports
+                    if (r.transports && r.transports.length > 0) {
+                        r.transports.forEach((veh, i) => {
+                            addTransportRow(veh, r.trans_qtys[i], r.trans_days[i], r.trans_pickups[i], r.trans_custom_rates[i], r.trans_custom_totals[i]);
+                        });
+                    } else {
+                        addTransportRow();
+                    }
+
+                    // 7. Populate Add-ons
+                    if (r.addon_names && r.addon_names.length > 0) {
+                        r.addon_names.forEach((name, i) => {
+                            addAddonRow(name, r.addon_prices[i], r.addon_types[i]);
+                        });
+                    }
+
+                    // 8. Populate Terms (RTEs)
+                    $('#quote_inclusions_editor').html(r.quote_inclusions || '');
+                    $('#quote_inclusions').val(r.quote_inclusions || '');
+                    $('#quote_exclusions_editor').html(r.quote_exclusions || '');
+                    $('#quote_exclusions').val(r.quote_exclusions || '');
+                    $('#quote_payment_terms_editor').html(r.quote_payment_terms || '');
+                    $('#quote_payment_terms').val(r.quote_payment_terms || '');
+                    $('#quote_dest_note_editor').html(r.quote_dest_note || '');
+                    $('#quote_dest_note').val(r.quote_dest_note || '');
+                    $('#quote_company_details_editor').html(r.quote_company_details || '');
+                    $('#quote_company_details').val(r.quote_company_details || '');
+
+                    // 9. Populate Final Adjustments
+                    $('#calc_override_profit').val(r.override_profit || '');
+                    $('#calc_manual_pp_override').val(r.manual_pp_override || '');
+                    $('select[name="discount_1_type"]').val(r.d1_type || 'none');
+                    $('input[name="discount_1_value"]').val(r.d1_val || 0);
+                    $('select[name="discount_2_type"]').val(r.d2_type || 'none');
+                    $('input[name="discount_2_value"]').val(r.d2_val || 0);
+
+                    // Change button look so you know you are updating!
+                    $('#tcc_calculate_btn').text('Update Quote Data').css('background-color', '#d97706');
+
+                    // Calculate live pricing and scroll smoothly to Step 1
+                    triggerLiveCalculation();
+                    $('html, body').animate({ scrollTop: $('#tcc-step-1').offset().top - 30 }, 500);
+
+                }, 800); // Wait allows master dropdowns to load
+            } else {
+                alert("Error loading quote data.");
             }
         });
     });
@@ -1733,21 +1915,59 @@ jQuery(document).ready(function($) {
         }
     });
 
+    // SAVE POST QUOTE DISCOUNT
+    $('#pmt_save_discount_btn').on('click', function() {
+        let qid = $('#pmt_quote_select').val();
+        let discount = $('#pmt_post_discount').val();
+        if(!qid) return;
+
+        let btn = $(this);
+        let origText = btn.text();
+        btn.text('...').prop('disabled', true);
+
+        $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_save_post_discount', quote_id: qid, discount: discount }, function(res) {
+            btn.text(origText).prop('disabled', false);
+            if(res.success) {
+                $(document).trigger('tcc_finances_updated', ['tcc-script']); // ADDED
+                refreshPaymentDashboard();
+            } else {
+                alert("Failed to save discount.");
+            }
+        });
+    });
+
     function refreshPaymentDashboard() {
         let qid = $('#pmt_quote_select').val();
         if(!qid) return;
         
         $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_load_quote_payments', quote_id: qid }, function(res) {
             if(res.success) {
-                
+                // Populate the discount input box
+                $('#pmt_post_discount').val(res.data.post_discount || 0);
+
+                // NEW: Populate Expected Net Profit Box (Profit - Post Discount)
+                let expectedProfit = (res.data.net_profit || 0) - (res.data.post_discount || 0);
+                $('#pmt_profit_val').text(formatINR(expectedProfit)).css('color', expectedProfit < 0 ? '#dc2626' : '#0ea5e9');
+
                 if(res.data.is_cancelled) {
-                    $('#pmt_total_val').html(`<span style="text-decoration:line-through; opacity:0.5;">${formatINR(res.data.grand_total)}</span> <br><span style="font-size:10px; color:#dc2626; font-weight:bold;">CANCELLED</span>`);
+                    let totalHtml = `<span style="text-decoration:line-through; opacity:0.5;">${formatINR(res.data.grand_total)}</span>`;
+                    if(res.data.post_discount > 0) {
+                        totalHtml += `<br><span style="font-size:11px; color:#dc2626; text-decoration:line-through; opacity:0.5;">Discount: -${formatINR(res.data.post_discount)}</span>`;
+                    }
+                    totalHtml += `<br><span style="font-size:10px; color:#dc2626; font-weight:bold;">CANCELLED</span>`;
+                    $('#pmt_total_val').html(totalHtml);
+                    
                     $('#pmt_received_val').parent().find('div:first').text('TOTAL REFUNDED');
                     $('#pmt_received_val').text(formatINR(res.data.total_refunded)).css('color', '#dc2626');
                     $('#pmt_balance_val').parent().find('div:first').text('CANCELLATION INCOME');
                     $('#pmt_balance_val').text(formatINR(res.data.retained_income)).css('color', '#16a34a');
                 } else {
-                    $('#pmt_total_val').text(formatINR(res.data.grand_total));
+                    let totalHtml = formatINR(res.data.grand_total);
+                    if(res.data.post_discount > 0) {
+                        totalHtml += `<br><span style="font-size:11px; color:#dc2626; font-weight:normal;">Discount: -${formatINR(res.data.post_discount)}</span>`;
+                    }
+                    $('#pmt_total_val').html(totalHtml);
+
                     $('#pmt_received_val').parent().find('div:first').text('AGENCY RECEIVED');
                     $('#pmt_received_val').html(`${formatINR(res.data.total_paid)}<br><span style="font-size:11px; color:#64748b; font-weight:normal;">Net in Bank: ${formatINR(res.data.net_in_bank)}</span>`).css('color', '#16a34a');
                     $('#pmt_balance_val').parent().find('div:first').text('BALANCE DUE');
@@ -1851,6 +2071,7 @@ jQuery(document).ready(function($) {
         $.post(tcc_ajax_obj.ajax_url, data, function(res) {
             btn.prop('disabled', false).text(originalText);
             if(res.success) {
+                $(document).trigger('tcc_finances_updated', ['tcc-script']); // ADDED
                 $('#pmt_cancel_edit_btn').trigger('click'); // Reset everything perfectly
                 refreshPaymentDashboard();
             }
@@ -1864,6 +2085,7 @@ jQuery(document).ready(function($) {
         
         $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_delete_payment', quote_id: qid, pmt_id: pmt_id }, function(res) {
             if(res.success) {
+                $(document).trigger('tcc_finances_updated', ['tcc-script']); // ADDED
                 $('#pmt_cancel_edit_btn').trigger('click');
                 refreshPaymentDashboard();
             }
@@ -1899,6 +2121,7 @@ jQuery(document).ready(function($) {
                 new_name: newVal.trim()
             }, function(res) {
                 if(res.success) {
+                    $(document).trigger('tcc_data_updated', ['tcc-script']); // ADDED
                     tccMasterData = res.data.new_master;
                     rebuildDestinationDropdowns();
                     updateSettingsDropdowns();
@@ -1943,6 +2166,7 @@ jQuery(document).ready(function($) {
         $.post(tcc_ajax_obj.ajax_url, $(this).serialize() + '&action=tcc_save_global_settings', function(res) {
             btn.prop('disabled', false).text(originalText);
             if(res.success) { 
+                $(document).trigger('tcc_data_updated', ['tcc-script']); // ADDED
                 showSettingsMessage(res.data.message); 
                 tccGlobalSettings.gst = parseFloat($('#global_gst').val());
                 tccGlobalSettings.pt = parseFloat($('#global_pt').val());
@@ -2064,6 +2288,7 @@ jQuery(document).ready(function($) {
                 new_hotel_name: newName
             }, function(res) {
                 if(res.success) {
+                    $(document).trigger('tcc_data_updated', ['tcc-script']); // ADDED
                     showSettingsMessage(res.data.message);
                     fetchHotelNamesList(); 
                 } else {
@@ -2090,6 +2315,7 @@ jQuery(document).ready(function($) {
                 set_hotel_name: hotel
             }, function(res) {
                 if(res.success) {
+                    $(document).trigger('tcc_data_updated', ['tcc-script']); // ADDED
                     showSettingsMessage(res.data.message);
                     fetchHotelNamesList(); 
                     $('#edit_hotel_name_btn').hide();
@@ -2116,6 +2342,7 @@ jQuery(document).ready(function($) {
                 set_vehicle: vehicle
             }, function(res) {
                 if(res.success) {
+                    $(document).trigger('tcc_data_updated', ['tcc-script']); // ADDED
                     showSettingsMessage(res.data.message);
                     fetchTransportPricing(); 
                 } else {
@@ -2261,6 +2488,7 @@ jQuery(document).ready(function($) {
 
         $.post(tcc_ajax_obj.ajax_url, $(this).serialize() + '&action=tcc_save_master_settings', function(res) {
             if(res.success) { 
+                $(document).trigger('tcc_data_updated', ['tcc-script']); // ADDED
                 showSettingsMessage(res.data.message); 
                 tccMasterData = res.data.new_master; 
                 rebuildDestinationDropdowns(); 
@@ -2273,14 +2501,20 @@ jQuery(document).ready(function($) {
     $('#tcc-settings-form').on('submit', function(e) {
         e.preventDefault();
         $.post(tcc_ajax_obj.ajax_url, $(this).serialize() + '&action=tcc_save_pricing_settings', function(res) {
-            if(res.success) { showSettingsMessage(res.data.message); fetchHotelNamesList(); }
+            if(res.success) { 
+                $(document).trigger('tcc_data_updated', ['tcc-script']); // ADDED
+                showSettingsMessage(res.data.message); fetchHotelNamesList(); 
+            }
         });
     });
 
     $('#tcc-transport-settings-form').on('submit', function(e) {
         e.preventDefault();
         $.post(tcc_ajax_obj.ajax_url, $(this).serialize() + '&action=tcc_save_transport_settings', function(res) {
-            if(res.success) showSettingsMessage(res.data.message);
+            if(res.success) {
+                $(document).trigger('tcc_data_updated', ['tcc-script']); // ADDED
+                showSettingsMessage(res.data.message);
+            }
         });
     });
 

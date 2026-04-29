@@ -35,6 +35,7 @@ add_action( 'wp_ajax_tcc_load_quotes_list', 'tcc_load_quotes_list' );
 add_action( 'wp_ajax_tcc_load_quote_payments', 'tcc_load_quote_payments' );
 add_action( 'wp_ajax_tcc_add_payment', 'tcc_add_payment' );
 add_action( 'wp_ajax_tcc_delete_payment', 'tcc_delete_payment' );
+add_action( 'wp_ajax_tcc_save_post_discount', 'tcc_save_post_discount' );
 
 add_action( 'wp_ajax_tcc_delete_quote', 'tcc_delete_quote' );
 add_action( 'wp_ajax_tcc_duplicate_quote', 'tcc_duplicate_quote' ); // NEW DUPLICATE ACTION
@@ -1042,6 +1043,12 @@ function tcc_load_quote_payments() {
     $data = json_decode($post->post_content, true);
     $grand_total = floatval($data['grand_total']);
     
+    // NEW: Fetch Net Profit from Quote Data
+    $net_profit = isset($data['summary']['net_profit']) ? floatval($data['summary']['net_profit']) : 0;
+    
+    // Fetch Post Quote Discount
+    $post_discount = floatval(get_post_meta($post_id, 'tcc_post_quote_discount', true));
+    
     // Fetch original tax rates to reverse-calculate the exact waiver
     $gst_pct = isset($data['summary']['gst_pct']) ? floatval($data['summary']['gst_pct']) / 100 : 0.05;
     $pt_pct = isset($data['summary']['pt_pct']) ? floatval($data['summary']['pt_pct']) / 100 : 0;
@@ -1081,15 +1088,17 @@ function tcc_load_quote_payments() {
     $is_cancelled = ($has_refund || $status === 'Canceled');
     $retained_income = max(0, $total_paid - $total_refunded);
     
-    // Balance reduces by Agency Payment + Vendor Payment + The Waived Taxes
-    $balance = $is_cancelled ? 0 : max(0, $grand_total - $total_paid - $vendor_paid - $tax_waiver);
+    // Balance reduces by Agency Payment + Vendor Payment + The Waived Taxes + the flat Post-Quote Discount
+    $balance = $is_cancelled ? 0 : max(0, $grand_total - $post_discount - $total_paid - $vendor_paid - $tax_waiver);
     $net_in_bank = $total_paid - $total_actual_pg; 
 
-    // NEW: Calculate Vendor Direct Balance (mathematically stripping GST, PT, and PG)
+    // Calculate Vendor Direct Balance (mathematically stripping GST, PT, and PG)
     $vendor_direct_balance = $is_cancelled ? 0 : max(0, $balance / ( (1 + $gst_pct) * (1 + $pt_pct + $pg_pct) ));
 
     wp_send_json_success(array(
         'grand_total' => $grand_total,
+        'net_profit' => round($net_profit, 2),
+        'post_discount' => $post_discount, // Pass to frontend for rendering
         'total_paid' => $total_paid,
         'vendor_paid' => $vendor_paid,
         'tax_waiver' => $tax_waiver,
@@ -1098,7 +1107,7 @@ function tcc_load_quote_payments() {
         'total_refunded' => $total_refunded,
         'retained_income' => $retained_income,
         'balance' => $balance,
-        'vendor_direct_balance' => round($vendor_direct_balance, 2), // <--- Added Variable
+        'vendor_direct_balance' => round($vendor_direct_balance, 2), 
         'is_cancelled' => $is_cancelled,
         'payments' => $payments
     ));
@@ -1168,6 +1177,17 @@ function tcc_delete_payment() {
     
     update_post_meta($post_id, 'tcc_payments', $new_payments);
     wp_send_json_success();
+}
+
+function tcc_save_post_discount() {
+    if ( ! is_user_logged_in() ) wp_die();
+    $quote_id = intval($_POST['quote_id']);
+    $discount = floatval($_POST['discount']);
+    if($quote_id) {
+        update_post_meta($quote_id, 'tcc_post_quote_discount', $discount);
+        wp_send_json_success();
+    }
+    wp_send_json_error();
 }
 
 function tcc_delete_quote() {

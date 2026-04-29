@@ -48,7 +48,9 @@ function tcc_load_master_finances_ajax() {
                         $desc_suffix = ' [Auto-Daily]';
                     }
                     
-                    $general[] = array('id' => uniqid('ge_auto_'), 'date' => $loop_date, 'category' => $rec['category'], 'desc' => $rec['desc'] . $desc_suffix, 'amount' => $daily_amt);
+                    $paid_by = isset($rec['paid_by']) ? $rec['paid_by'] : '';
+                    
+                    $general[] = array('id' => uniqid('ge_auto_'), 'date' => $loop_date, 'category' => $rec['category'], 'desc' => $rec['desc'] . $desc_suffix, 'amount' => $daily_amt, 'paid_by' => $paid_by);
                     $changed = true;
                 }
             }
@@ -95,6 +97,10 @@ function tcc_load_master_finances_ajax() {
 
         $grand_total = isset($data['grand_total']) ? floatval($data['grand_total']) : (isset($sum['grand_total']) ? floatval($sum['grand_total']) : 0);
 
+        // Load Post-Quote Discount & Subtract from master package value
+        $post_quote_discount = floatval(get_post_meta($q->ID, 'tcc_post_quote_discount', true));
+        $grand_total -= $post_quote_discount;
+
         $total_addon_cost = isset($sum['total_addon_cost']) ? floatval($sum['total_addon_cost']) : 0;
         $quote_addons = array();
         if (isset($data['addons']) && is_array($data['addons'])) {
@@ -118,7 +124,6 @@ function tcc_load_master_finances_ajax() {
         $vendor_paid = 0;
         foreach($vendor_payments as $vp) { $vendor_paid += floatval($vp['amount']); }
 
-        // --- NEW: TAX WAIVER & DIRECT TO VENDOR SYNC ---
         $gst_pct = isset($sum['gst_pct']) ? floatval($sum['gst_pct']) / 100 : 0.05;
         $pt_pct = isset($sum['pt_pct']) ? floatval($sum['pt_pct']) / 100 : 0;
         $pg_pct = isset($sum['pg_pct']) ? floatval($sum['pg_pct']) / 100 : 0;
@@ -130,7 +135,6 @@ function tcc_load_master_finances_ajax() {
                     $amt = floatval($p['amount']);
                     $vendor_paid += $amt;
                     
-                    // Auto-inject into vendor history
                     $vendor_payments[] = array(
                         'date' => $p['date'],
                         'desc' => 'Auto-Sync: ' . (isset($p['ref']) && $p['ref'] ? $p['ref'] : 'Vendor Payment'),
@@ -138,7 +142,6 @@ function tcc_load_master_finances_ajax() {
                         'is_auto' => true
                     );
 
-                    // Revers-calculate the waived tax
                     $waiver = ($amt * $gst_pct) + ($amt * (1 + $gst_pct) * ($pt_pct + $pg_pct));
                     $total_tax_waiver += $waiver;
                 }
@@ -176,13 +179,9 @@ function tcc_load_master_finances_ajax() {
     $partners = get_option('tcc_agency_partners', array());
     if(!is_array($partners)) $partners = array();
     
-    // Fallback migration to inject "history" and "is_investor" format into any older partner data arrays
     foreach($partners as &$p) {
         if(!isset($p['history'])) {
             $p['history'] = array(array('date' => '2000-01-01', 'percent' => isset($p['percent']) ? floatval($p['percent']) : 0));
-        }
-        if(!isset($p['is_investor'])) {
-            $p['is_investor'] = false;
         }
     }
     
@@ -243,15 +242,25 @@ function tcc_save_general_expense_ajax() {
     $cat = sanitize_text_field($_POST['cat']);
     $desc = sanitize_text_field($_POST['desc']);
     $amount = floatval($_POST['amount']);
+    $paid_by = isset($_POST['paid_by']) ? sanitize_text_field($_POST['paid_by']) : '';
     
     if(empty($date) || empty($cat) || $amount <= 0) wp_send_json_error("Invalid input");
     $general = get_option('tcc_general_expenses', array());
     if(!is_array($general)) $general = array(); 
     
     if (!empty($id)) {
-        foreach ($general as &$ge) { if ($ge['id'] === $id) { $ge['date'] = $date; $ge['category'] = $cat; $ge['desc'] = $desc; $ge['amount'] = $amount; break; } }
+        foreach ($general as &$ge) { 
+            if ($ge['id'] === $id) { 
+                $ge['date'] = $date; 
+                $ge['category'] = $cat; 
+                $ge['desc'] = $desc; 
+                $ge['amount'] = $amount; 
+                $ge['paid_by'] = $paid_by;
+                break; 
+            } 
+        }
     } else {
-        $general[] = array('id' => uniqid('ge_'), 'date' => $date, 'category' => $cat, 'desc' => $desc, 'amount' => $amount);
+        $general[] = array('id' => uniqid('ge_'), 'date' => $date, 'category' => $cat, 'desc' => $desc, 'amount' => $amount, 'paid_by' => $paid_by);
     }
     update_option('tcc_general_expenses', array_values($general));
     wp_send_json_success();
@@ -275,15 +284,16 @@ function tcc_save_auto_expense_ajax() {
     $desc = sanitize_text_field($_POST['desc']);
     $amount = floatval($_POST['amount']);
     $freq = isset($_POST['freq']) ? sanitize_text_field($_POST['freq']) : 'daily';
+    $paid_by = isset($_POST['paid_by']) ? sanitize_text_field($_POST['paid_by']) : '';
     
     if(empty($cat) || $amount <= 0) wp_send_json_error("Invalid input");
     $autos = get_option('tcc_auto_daily_expenses', array());
     if(!is_array($autos)) $autos = array(); 
     
     if (!empty($id)) {
-        foreach ($autos as &$a) { if ($a['id'] === $id) { $a['category'] = $cat; $a['desc'] = $desc; $a['amount'] = $amount; $a['freq'] = $freq; break; } }
+        foreach ($autos as &$a) { if ($a['id'] === $id) { $a['category'] = $cat; $a['desc'] = $desc; $a['amount'] = $amount; $a['freq'] = $freq; $a['paid_by'] = $paid_by; break; } }
     } else {
-        $autos[] = array('id' => uniqid('ae_'), 'category' => $cat, 'desc' => $desc, 'amount' => $amount, 'freq' => $freq);
+        $autos[] = array('id' => uniqid('ae_'), 'category' => $cat, 'desc' => $desc, 'amount' => $amount, 'freq' => $freq, 'paid_by' => $paid_by);
     }
     update_option('tcc_auto_daily_expenses', array_values($autos));
     wp_send_json_success();
@@ -300,14 +310,12 @@ function tcc_delete_auto_expense_ajax() {
     wp_send_json_success();
 }
 
-// PARTNERS
 function tcc_save_partner_ajax() {
     if ( ! is_user_logged_in() ) wp_die();
     
     $id = isset($_POST['id']) ? sanitize_text_field($_POST['id']) : '';
     $name = sanitize_text_field($_POST['name']);
     $percent = floatval($_POST['percent']);
-    $is_investor = isset($_POST['is_investor']) && $_POST['is_investor'] === 'true';
     $today = current_time('Y-m-d');
 
     if(empty($name) || $percent < 0) wp_send_json_error();
@@ -315,16 +323,10 @@ function tcc_save_partner_ajax() {
     $partners = get_option('tcc_agency_partners', array());
     if(!is_array($partners)) $partners = array();
 
-    // If this partner is the investor, remove the investor tag from everyone else
-    if ($is_investor) {
-        foreach($partners as &$p) { $p['is_investor'] = false; }
-    }
-
     if(!empty($id)) {
         foreach($partners as &$p) {
             if($p['id'] === $id) {
                 $p['name'] = $name;
-                $p['is_investor'] = $is_investor;
                 
                 if(!isset($p['history'])) { $p['history'] = array(array('date' => '2000-01-01', 'percent' => isset($p['percent']) ? floatval($p['percent']) : 0)); }
                 
@@ -343,7 +345,6 @@ function tcc_save_partner_ajax() {
         $partners[] = array(
             'id' => uniqid('pt_'), 
             'name' => $name, 
-            'is_investor' => $is_investor,
             'history' => array(array('date' => $today, 'percent' => $percent))
         );
     }
@@ -362,20 +363,20 @@ function tcc_delete_partner_ajax() {
     wp_send_json_success();
 }
 
-// CUSTOM P&L
 function tcc_save_custom_pl_ajax() {
     if ( ! is_user_logged_in() ) wp_die();
     $date = sanitize_text_field($_POST['date']);
     $desc = sanitize_text_field($_POST['desc']);
-    $type = sanitize_text_field($_POST['type']); // 'profit' or 'loss'
+    $type = sanitize_text_field($_POST['type']); 
     $amount = floatval($_POST['amount']);
+    $partner_id = isset($_POST['partner_id']) ? sanitize_text_field($_POST['partner_id']) : '';
 
     if(empty($date) || $amount <= 0) wp_send_json_error();
 
     $pls = get_option('tcc_custom_pl', array());
     if(!is_array($pls)) $pls = array();
 
-    $pls[] = array('id' => uniqid('cpl_'), 'date' => $date, 'desc' => $desc, 'type' => $type, 'amount' => $amount);
+    $pls[] = array('id' => uniqid('cpl_'), 'date' => $date, 'desc' => $desc, 'type' => $type, 'amount' => $amount, 'partner_id' => $partner_id);
     update_option('tcc_custom_pl', array_values($pls));
     wp_send_json_success();
 }

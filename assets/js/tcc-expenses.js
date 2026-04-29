@@ -1,5 +1,16 @@
 jQuery(document).ready(function($) {
 
+    // === INTERCONNECTIVITY EVENT LISTENERS ===
+    $(document).on('tcc_finances_updated', function(e, source) {
+        if (source === 'tcc-expenses') return;
+        loadMasterData(function() {
+            let currentBooking = $('#bk_select').val();
+            if(currentBooking) {
+                $('#bk_select').val(currentBooking).trigger('change');
+            }
+        });
+    });
+
     let masterData = null;
     let currentBookingFilter = 'all';
 
@@ -7,7 +18,6 @@ jQuery(document).ready(function($) {
         return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
     }
 
-    // Date Helper functions for reliable YYYY-MM-DD conversions
     function getLocalDateString(dateObj) {
         let y = dateObj.getFullYear();
         let m = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -41,7 +51,6 @@ jQuery(document).ready(function($) {
         try { calculateDashboardTotals(); } catch(e) {}
     });
 
-    // Default to last 7 days for the Partner Ledger
     let ptNow = new Date();
     let ptSevenDaysAgo = new Date();
     ptSevenDaysAgo.setDate(ptNow.getDate() - 6);
@@ -68,11 +77,9 @@ jQuery(document).ready(function($) {
                 try { renderAutoExpenses(); } catch(err) {}
                 try { calculateDashboardTotals(); } catch(err) {}
                 try { renderBookingDropdown(); } catch(err) {}
-                
                 try { renderPartners(); } catch(err) {}
                 try { renderCustomPL(); } catch(err) {}
                 try { renderPartnerLedger(); } catch(err) {}
-                
                 if(callback) callback();
             }
         });
@@ -134,11 +141,19 @@ jQuery(document).ready(function($) {
                         </tr>`;
             filteredGeneral.forEach(e => {
                 let safeDesc = e.desc ? String(e.desc).replace(/"/g, '&quot;') : '';
+                
+                let paidByName = 'Agency / Bank';
+                if(e.paid_by && masterData.partners) {
+                    let pt = masterData.partners.find(p => p.id === e.paid_by);
+                    if(pt) paidByName = pt.name;
+                }
+                let paidByBadge = e.paid_by ? `<span style="font-size:10px; background:#e0f2fe; color:#0284c7; padding:2px 6px; border-radius:3px; font-weight:bold; margin-left:5px;">Paid by: ${paidByName}</span>` : '';
+
                 generalHtml += `<tr style="border-bottom:1px solid #f1f5f9;">
-                            <td style="padding:8px;">${e.date}</td><td style="padding:8px;">${e.category}</td><td style="padding:8px; color:#64748b;">${e.desc}</td>
+                            <td style="padding:8px;">${e.date}</td><td style="padding:8px;">${e.category}</td><td style="padding:8px; color:#64748b;">${e.desc} ${paidByBadge}</td>
                             <td style="padding:8px; font-weight:bold; color:#dc2626;">-${expFormatINR(e.amount)}</td>
                             <td style="padding:8px; text-align:right;">
-                                <button type="button" class="edit-ge-btn" data-id="${e.id}" data-date="${e.date}" data-cat="${e.category}" data-desc="${safeDesc}" data-amount="${e.amount}" style="background:none; border:none; color:#0369a1; cursor:pointer; text-decoration:underline; margin-right:8px; font-size:12px;">Edit</button>
+                                <button type="button" class="edit-ge-btn" data-id="${e.id}" data-date="${e.date}" data-cat="${e.category}" data-desc="${safeDesc}" data-amount="${e.amount}" data-paidby="${e.paid_by || ''}" style="background:none; border:none; color:#0369a1; cursor:pointer; text-decoration:underline; margin-right:8px; font-size:12px;">Edit</button>
                                 <button type="button" class="del-ge-btn" data-id="${e.id}" style="background:none; border:none; color:#dc2626; cursor:pointer; text-decoration:underline; font-size:12px;">Delete</button>
                             </td></tr>`;
             });
@@ -182,7 +197,7 @@ jQuery(document).ready(function($) {
                 let b_actual_pg = parseFloat(b.actual_pg) || 0;
                 let b_tax_waiver = parseFloat(b.tax_waiver) || 0;
 
-                let b_actual_paid_expense = b_vendor_paid + parseFloat(b.auto_pt) + b_actual_pg + parseFloat(b.auto_gst) - b_tax_waiver;
+                let b_actual_paid_expense = b_base_cost + parseFloat(b.auto_pt) + b_actual_pg + parseFloat(b.auto_gst) - b_tax_waiver;
                 let b_expected_total_expense = b_base_cost + parseFloat(b.auto_pt) + parseFloat(b.auto_pg) + parseFloat(b.auto_gst) - b_tax_waiver;
                 let b_pkg_value = (parseFloat(b.pkg_value) || 0) + manualPkg;
                 
@@ -207,11 +222,11 @@ jQuery(document).ready(function($) {
                     if (inCurrentFP) {
                         t_expense_paid += b_actual_paid_expense;
                         t_pt += parseFloat(b.auto_pt) || 0; t_pg += b_actual_pg; t_gst += parseFloat(b.auto_gst) || 0;
-                        t_net_profit += (b_income + manualProfit - b_expected_total_expense);
+                        t_net_profit += (b_pkg_value + manualProfit - b_expected_total_expense);
                     }
                     if (inPrevFP) {
                         p_expense_paid += b_actual_paid_expense;
-                        p_net_profit += (b_income + manualProfit - b_expected_total_expense);
+                        p_net_profit += (b_pkg_value + manualProfit - b_expected_total_expense);
                     }
                 }
             });
@@ -220,6 +235,9 @@ jQuery(document).ready(function($) {
         if (masterData.custom_pl) {
             masterData.custom_pl.forEach(pl => {
                 let plAmt = parseFloat(pl.amount) || 0;
+                
+                if(pl.type === 'investment') return;
+
                 let isProfit = pl.type === 'profit';
                 if (hasFilter) {
                     if (pl.date >= start && pl.date <= end) t_net_profit += isProfit ? plAmt : -plAmt;
@@ -260,32 +278,38 @@ jQuery(document).ready(function($) {
         $('#m_travellers_compare').html(getTrendHtml(t_travellers, p_travellers));
     }
 
-    // --- EVERYDAY EXPENSE LOGIC ---
     $('#frm_general_expense').on('submit', function(e) {
         e.preventDefault();
         let btn = $(this).find('button[type="submit"]'); let origText = btn.text(); btn.text('Saving...').prop('disabled', true);
         $.post(tcc_exp_obj.ajax_url, {
-            action: 'tcc_save_general_expense', id: $('#ge_id').val(), date: $('#ge_date').val(), cat: $('#ge_cat').val(), desc: $('#ge_desc').val(), amount: $('#ge_amt').val()
+            action: 'tcc_save_general_expense', id: $('#ge_id').val(), date: $('#ge_date').val(), cat: $('#ge_cat').val(), desc: $('#ge_desc').val(), amount: $('#ge_amt').val(), paid_by: $('#ge_paid_by').val()
         }, function(res) {
             btn.prop('disabled', false);
-            if(res.success) { $('#ge_id').val(''); $('#frm_general_expense')[0].reset(); btn.text('Add'); $('#ge_cancel_edit').hide(); loadMasterData(); } 
+            if(res.success) { 
+                $(document).trigger('tcc_finances_updated', ['tcc-expenses']);
+                $('#ge_id').val(''); $('#frm_general_expense')[0].reset(); btn.text('Add'); $('#ge_cancel_edit').hide(); loadMasterData(); 
+            } 
             else { btn.text(origText); alert("Error saving expense."); }
         });
     });
 
     $(document).on('click', '.edit-ge-btn', function() {
         $('#ge_id').val($(this).data('id')); $('#ge_date').val($(this).data('date')); $('#ge_cat').val($(this).data('cat'));
-        $('#ge_desc').val($(this).data('desc')); $('#ge_amt').val($(this).data('amount'));
+        $('#ge_desc').val($(this).data('desc')); $('#ge_amt').val($(this).data('amount')); $('#ge_paid_by').val($(this).data('paidby'));
         $('#frm_general_expense button[type="submit"]').text('Update'); $('#ge_cancel_edit').show();
         $('html, body').animate({ scrollTop: $("#frm_general_expense").offset().top - 80 }, 300);
     });
     $('#ge_cancel_edit').on('click', function() { $('#ge_id').val(''); $('#frm_general_expense')[0].reset(); $('#frm_general_expense button[type="submit"]').text('Add'); $(this).hide(); });
     $(document).on('click', '.del-ge-btn', function() {
         if(!confirm('Delete this expense?')) return;
-        $.post(tcc_exp_obj.ajax_url, { action: 'tcc_delete_general_expense', id: $(this).data('id') }, function(res) { if(res.success) loadMasterData(); });
+        $.post(tcc_exp_obj.ajax_url, { action: 'tcc_delete_general_expense', id: $(this).data('id') }, function(res) { 
+            if(res.success) {
+                $(document).trigger('tcc_finances_updated', ['tcc-expenses']);
+                loadMasterData(); 
+            }
+        });
     });
 
-    // --- AUTO EXPENSES ---
     function renderAutoExpenses() {
         let html = '', expenses = [];
         if(masterData && masterData.auto_expenses) {
@@ -306,12 +330,19 @@ jQuery(document).ready(function($) {
                 if (freq === 'monthly') amtStr += ` <span style="font-size:10px; font-weight:normal; color:#64748b;">/ month</span>`;
                 else amtStr += ` <span style="font-size:10px; font-weight:normal; color:#64748b;">/ day</span>`;
                 
+                let paidByName = 'Agency / Bank';
+                if(e.paid_by && masterData.partners) {
+                    let pt = masterData.partners.find(p => p.id === e.paid_by);
+                    if(pt) paidByName = pt.name;
+                }
+                let paidByBadge = e.paid_by ? `<span style="font-size:10px; background:#e0f2fe; color:#0284c7; padding:2px 6px; border-radius:3px; font-weight:bold; margin-left:5px;">Paid by: ${paidByName}</span>` : '';
+
                 html += `<tr style="border-bottom:1px solid #f1f5f9;">
                             <td style="padding:8px;"><span style="background:#dcfce7; color:#166534; font-size:10px; padding:2px 6px; border-radius:10px; font-weight:bold; border:1px solid #bbf7d0;">🟢 Active</span></td>
-                            <td style="padding:8px;"><strong>${cat}</strong><br><span style="color:#64748b; font-size:11px;">${safeDesc}</span></td>
+                            <td style="padding:8px;"><strong>${cat}</strong><br><span style="color:#64748b; font-size:11px;">${safeDesc} ${paidByBadge}</span></td>
                             <td style="padding:8px; font-weight:bold;">${amtStr}</td>
                             <td style="padding:8px;">
-                                <button type="button" class="edit-ae-btn" data-id="${eid}" data-cat="${cat}" data-desc="${safeDesc}" data-amount="${amt}" data-freq="${freq}" style="background:none; border:none; color:#0369a1; cursor:pointer; text-decoration:underline; margin-right:8px; font-size:12px;">Edit</button>
+                                <button type="button" class="edit-ae-btn" data-id="${eid}" data-cat="${cat}" data-desc="${safeDesc}" data-amount="${amt}" data-freq="${freq}" data-paidby="${e.paid_by || ''}" style="background:none; border:none; color:#0369a1; cursor:pointer; text-decoration:underline; margin-right:8px; font-size:12px;">Edit</button>
                                 <button type="button" class="del-ae-btn" data-id="${eid}" style="background:none; border:none; color:#dc2626; cursor:pointer; text-decoration:underline; font-size:12px;">Delete</button>
                             </td></tr>`;
             });
@@ -324,17 +355,20 @@ jQuery(document).ready(function($) {
         e.preventDefault();
         let btn = $(this).find('button[type="submit"]'); let origText = btn.text(); btn.text('...').prop('disabled', true);
         $.post(tcc_exp_obj.ajax_url, {
-            action: 'tcc_save_auto_expense', id: $('#ae_id').val(), cat: $('#ae_cat').val(), desc: $('#ae_desc').val(), amount: $('#ae_amt').val(), freq: $('#ae_freq').val()
+            action: 'tcc_save_auto_expense', id: $('#ae_id').val(), cat: $('#ae_cat').val(), desc: $('#ae_desc').val(), amount: $('#ae_amt').val(), freq: $('#ae_freq').val(), paid_by: $('#ae_paid_by').val()
         }, function(res) {
             btn.text(origText).prop('disabled', false);
-            if(res && res.success) { $('#ae_id').val(''); $('#frm_auto_expense')[0].reset(); $('#ae_cancel_edit').hide(); $('#frm_auto_expense button[type="submit"]').text('Set Recurring'); loadMasterData(); alert("Recurring expense saved successfully!"); } 
+            if(res && res.success) { 
+                $(document).trigger('tcc_finances_updated', ['tcc-expenses']);
+                $('#ae_id').val(''); $('#frm_auto_expense')[0].reset(); $('#ae_cancel_edit').hide(); $('#frm_auto_expense button[type="submit"]').text('Set Recurring'); loadMasterData(); alert("Recurring expense saved successfully!"); 
+            } 
             else alert("Error: Data could not be saved. Please check your inputs.");
         }).fail(function() { btn.text(origText).prop('disabled', false); alert("Server Error: Your database could not process the request."); });
     });
 
     $(document).on('click', '.edit-ae-btn', function() {
         $('#ae_id').val($(this).data('id')); $('#ae_cat').val($(this).data('cat')); $('#ae_desc').val($(this).data('desc'));
-        $('#ae_amt').val($(this).data('amount')); $('#ae_freq').val($(this).data('freq') || 'daily');
+        $('#ae_amt').val($(this).data('amount')); $('#ae_freq').val($(this).data('freq') || 'daily'); $('#ae_paid_by').val($(this).data('paidby'));
         $('#frm_auto_expense button[type="submit"]').text('Update'); $('#ae_cancel_edit').show();
         $('html, body').animate({ scrollTop: $("#frm_auto_expense").offset().top - 80 }, 300);
     });
@@ -343,10 +377,14 @@ jQuery(document).ready(function($) {
 
     $(document).on('click', '.del-ae-btn', function() {
         if(!confirm('Delete this auto-recurring expense? (Past logs will remain untouched)')) return;
-        $.post(tcc_exp_obj.ajax_url, { action: 'tcc_delete_auto_expense', id: $(this).data('id') }, function(res) { if(res.success) loadMasterData(); });
+        $.post(tcc_exp_obj.ajax_url, { action: 'tcc_delete_auto_expense', id: $(this).data('id') }, function(res) { 
+            if(res.success) {
+                $(document).trigger('tcc_finances_updated', ['tcc-expenses']);
+                loadMasterData(); 
+            }
+        });
     });
 
-    // --- QUICK STATUS FILTERS ---
     $(document).on('click', '.bk-filter-btn', function() {
         $('.bk-filter-btn').css({'background':'#fff', 'color':'#475569'}); $(this).css({'background':'#0f172a', 'color':'#fff'});
         currentBookingFilter = $(this).data('filter');
@@ -517,12 +555,13 @@ jQuery(document).ready(function($) {
 
         $.post(tcc_exp_obj.ajax_url, data, function(res) {
             btn.text(origText).prop('disabled', false);
-            if(res.success) { loadMasterData(function() { alert("Booking Finances Updated & Master Sync Successful!"); }); }
+            if(res.success) { 
+                $(document).trigger('tcc_finances_updated', ['tcc-expenses']);
+                loadMasterData(function() { alert("Booking Finances Updated & Master Sync Successful!"); }); 
+            }
         });
     });
 
-    // === PARTNERS & CUSTOM DAILY PROFIT/LOSS ===
-    
     function getLatestPercent(partner) {
         if(partner.history && partner.history.length > 0) {
             let h = [...partner.history].sort((a,b) => b.date.localeCompare(a.date));
@@ -534,6 +573,11 @@ jQuery(document).ready(function($) {
     function renderPartners() {
         let html = '';
         let totalPercent = 0;
+        
+        let geOptions = '<option value="">Agency / Bank</option>';
+        let aeOptions = '<option value="">Agency / Bank</option>';
+        let cplOptions = '<option value="">-- Select Partner --</option>';
+
         if(masterData.partners && masterData.partners.length > 0) {
             html += `<table style="width:100%; border-collapse:collapse; text-align:left;">
                         <tr style="background:#f1f5f9; border-bottom:1px solid #cbd5e1;">
@@ -544,13 +588,16 @@ jQuery(document).ready(function($) {
             masterData.partners.forEach(p => {
                 let curPercent = getLatestPercent(p);
                 totalPercent += curPercent;
-                let badge = p.is_investor ? ' <span style="background:#fef08a; color:#854d0e; font-size:9px; padding:2px 4px; border-radius:3px;">🏦 Owner/Investor</span>' : '';
+                
+                geOptions += `<option value="${p.id}">${p.name}</option>`;
+                aeOptions += `<option value="${p.id}">${p.name}</option>`;
+                cplOptions += `<option value="${p.id}">${p.name}</option>`;
                 
                 html += `<tr style="border-bottom:1px solid #f1f5f9;">
-                    <td style="padding:6px; font-weight:bold; color:#475569;">${p.name}${badge}</td>
+                    <td style="padding:6px; font-weight:bold; color:#475569;">${p.name}</td>
                     <td style="padding:6px; color:#0369a1; font-weight:bold;">${curPercent}%</td>
                     <td style="padding:6px; text-align:right;">
-                        <button type="button" class="edit-pt-btn" data-id="${p.id}" data-name="${p.name}" data-percent="${curPercent}" data-investor="${p.is_investor ? 'true' : 'false'}" style="background:none; border:none; color:#0369a1; cursor:pointer; font-size:11px; text-decoration:underline; margin-right:5px;">Edit</button>
+                        <button type="button" class="edit-pt-btn" data-id="${p.id}" data-name="${p.name}" data-percent="${curPercent}" style="background:none; border:none; color:#0369a1; cursor:pointer; font-size:11px; text-decoration:underline; margin-right:5px;">Edit</button>
                         <button type="button" class="del-pt-btn" data-id="${p.id}" style="background:none; border:none; color:#dc2626; cursor:pointer; font-size:11px; text-decoration:underline;">Remove</button>
                     </td>
                 </tr>`;
@@ -562,6 +609,15 @@ jQuery(document).ready(function($) {
             html = '<div style="padding:10px; color:#64748b;">No partners configured yet.</div>';
         }
         $('#pt_list_table').html(html);
+
+        let curGe = $('#ge_paid_by').val();
+        $('#ge_paid_by').html(geOptions).val(curGe || '');
+        
+        let curAe = $('#ae_paid_by').val();
+        $('#ae_paid_by').html(aeOptions).val(curAe || '');
+        
+        let curCpl = $('#cpl_partner').val();
+        $('#cpl_partner').html(cplOptions).val(curCpl || '');
     }
 
     function renderCustomPL() {
@@ -585,10 +641,19 @@ jQuery(document).ready(function($) {
                         </tr>`;
             filteredPL.forEach(pl => {
                 let isProfit = pl.type === 'profit';
+                let isInv = pl.type === 'investment';
+                let color = isProfit ? '#16a34a' : (isInv ? '#d97706' : '#dc2626');
+                
+                let partnerName = '';
+                if(isInv && pl.partner_id && masterData.partners) {
+                    let pt = masterData.partners.find(p => p.id === pl.partner_id);
+                    if(pt) partnerName = `<span style="font-size:10px; display:block; color:#64748b;">By: ${pt.name}</span>`;
+                }
+
                 html += `<tr style="border-bottom:1px solid #f1f5f9;">
                     <td style="padding:6px;">${pl.date}</td>
-                    <td style="padding:6px; color:#475569;">${pl.desc}</td>
-                    <td style="padding:6px; font-weight:bold; color:${isProfit ? '#16a34a' : '#dc2626'};">${isProfit ? '+' : '-'}${expFormatINR(pl.amount)}</td>
+                    <td style="padding:6px; color:#475569;">${pl.desc} ${partnerName}</td>
+                    <td style="padding:6px; font-weight:bold; color:${color};">${isProfit || isInv ? '+' : '-'}${expFormatINR(pl.amount)}</td>
                     <td style="padding:6px; text-align:right;"><button type="button" class="del-cpl-btn" data-id="${pl.id}" style="background:none; border:none; color:#dc2626; cursor:pointer; font-size:11px; text-decoration:underline;">X</button></td>
                 </tr>`;
             });
@@ -623,11 +688,11 @@ jQuery(document).ready(function($) {
             action: 'tcc_save_partner', 
             id: editId,
             name: $('#pt_name').val(), 
-            percent: newPercent,
-            is_investor: $('#pt_is_investor').is(':checked')
+            percent: newPercent
         }, function(res) {
             btn.text('Save').prop('disabled', false);
             if(res.success) { 
+                $(document).trigger('tcc_finances_updated', ['tcc-expenses']);
                 $('#pt_id').val(''); $('#frm_partner_setup')[0].reset(); $('#pt_cancel_edit').hide();
                 loadMasterData(); 
             }
@@ -638,7 +703,6 @@ jQuery(document).ready(function($) {
         $('#pt_id').val($(this).data('id')); 
         $('#pt_name').val($(this).data('name')); 
         $('#pt_percent').val($(this).data('percent'));
-        $('#pt_is_investor').prop('checked', $(this).data('investor') === true);
         $('#frm_partner_setup button[type="submit"]').text('Update Share'); 
         $('#pt_cancel_edit').show();
     });
@@ -650,20 +714,41 @@ jQuery(document).ready(function($) {
     });
 
     $(document).on('click', '.del-pt-btn', function() {
-        if(confirm("Remove this partner?")) $.post(tcc_exp_obj.ajax_url, { action: 'tcc_delete_partner', id: $(this).data('id') }, function(res) { if(res.success) loadMasterData(); });
+        if(confirm("Remove this partner?")) $.post(tcc_exp_obj.ajax_url, { action: 'tcc_delete_partner', id: $(this).data('id') }, function(res) { 
+            if(res.success) {
+                $(document).trigger('tcc_finances_updated', ['tcc-expenses']);
+                loadMasterData(); 
+            }
+        });
+    });
+
+    $('#cpl_type').on('change', function() {
+        if($(this).val() === 'investment') {
+            $('#cpl_partner').show().prop('required', true);
+        } else {
+            $('#cpl_partner').hide().prop('required', false).val('');
+        }
     });
 
     $('#frm_custom_pl').on('submit', function(e) {
         e.preventDefault();
         let btn = $(this).find('button[type="submit"]'); let origText = btn.text(); btn.text('...').prop('disabled', true);
-        $.post(tcc_exp_obj.ajax_url, { action: 'tcc_save_custom_pl', date: $('#cpl_date').val(), type: $('#cpl_type').val(), desc: $('#cpl_desc').val(), amount: $('#cpl_amt').val() }, function(res) {
+        $.post(tcc_exp_obj.ajax_url, { action: 'tcc_save_custom_pl', date: $('#cpl_date').val(), type: $('#cpl_type').val(), desc: $('#cpl_desc').val(), amount: $('#cpl_amt').val(), partner_id: $('#cpl_partner').val() }, function(res) {
             btn.text(origText).prop('disabled', false);
-            if(res.success) { $('#frm_custom_pl')[0].reset(); loadMasterData(); }
+            if(res.success) { 
+                $(document).trigger('tcc_finances_updated', ['tcc-expenses']);
+                $('#frm_custom_pl')[0].reset(); $('#cpl_partner').hide().prop('required', false); loadMasterData(); 
+            }
         });
     });
 
     $(document).on('click', '.del-cpl-btn', function() {
-        if(confirm("Delete this manual P&L record?")) $.post(tcc_exp_obj.ajax_url, { action: 'tcc_delete_custom_pl', id: $(this).data('id') }, function(res) { if(res.success) loadMasterData(); });
+        if(confirm("Delete this manual record?")) $.post(tcc_exp_obj.ajax_url, { action: 'tcc_delete_custom_pl', id: $(this).data('id') }, function(res) { 
+            if(res.success) {
+                $(document).trigger('tcc_finances_updated', ['tcc-expenses']);
+                loadMasterData(); 
+            }
+        });
     });
 
     function renderPartnerLedger() {
@@ -680,8 +765,32 @@ jQuery(document).ready(function($) {
             return dailyData[d];
         }
 
-        if(masterData.general_expenses) { masterData.general_expenses.forEach(e => { getDay(e.date).everyday_expense += parseFloat(e.amount)||0; }); }
-        if(masterData.custom_pl) { masterData.custom_pl.forEach(pl => { let amt = parseFloat(pl.amount)||0; getDay(pl.date).custom_pl += pl.type === 'profit' ? amt : -amt; }); }
+        let partnerReimbursements = {}; 
+        let partners = masterData.partners || [];
+        partners.forEach(p => { partnerReimbursements[p.id] = 0; });
+
+        if(masterData.general_expenses) { 
+            masterData.general_expenses.forEach(e => { 
+                let amt = parseFloat(e.amount)||0;
+                getDay(e.date).everyday_expense += amt; 
+                if(e.paid_by && partnerReimbursements[e.paid_by] !== undefined) {
+                    partnerReimbursements[e.paid_by] += amt;
+                }
+            }); 
+        }
+
+        if(masterData.custom_pl) { 
+            masterData.custom_pl.forEach(pl => { 
+                let amt = parseFloat(pl.amount)||0; 
+                if(pl.type === 'investment') {
+                    if(pl.partner_id && partnerReimbursements[pl.partner_id] !== undefined) {
+                        partnerReimbursements[pl.partner_id] += amt;
+                    }
+                } else {
+                    getDay(pl.date).custom_pl += pl.type === 'profit' ? amt : -amt; 
+                }
+            }); 
+        }
         
         if(masterData.bookings) {
             $.each(masterData.bookings, function(id, b) {
@@ -708,7 +817,7 @@ jQuery(document).ready(function($) {
 
                 if (cleared_value >= (pkg_value - 1)) {
                     let fpDate = b.final_payment_date || b.booking_date;
-                    let b_net_profit = (income + manualProfit) - expectedTotalCost;
+                    let b_net_profit = (pkg_value + manualProfit) - expectedTotalCost;
                     getDay(fpDate).booking_profit += b_net_profit;
                 }
             });
@@ -725,7 +834,6 @@ jQuery(document).ready(function($) {
             return;
         }
 
-        let partners = masterData.partners || [];
         let pHeaders = '';
         partners.forEach(p => { 
             let curPercent = getLatestPercent(p);
@@ -788,12 +896,19 @@ jQuery(document).ready(function($) {
 
         partners.forEach(p => { 
             let shareAmt = sumPartners[p.id];
-            let refundAmt = p.is_investor ? sumExp : 0; 
+            
+            // Reimburses directly to the individual who paid/invested
+            let refundAmt = partnerReimbursements[p.id] || 0;
+            
             let finalPayout = shareAmt + refundAmt;
 
             pShareFooters += `<th style="padding:8px; border-left:1px solid #94a3b8; font-size:12px; color:${shareAmt < 0 ? '#fca5a5' : '#86efac'}">${expFormatINR(shareAmt)}</th>`; 
-            pRefundFooters += `<th style="padding:8px; border-left:1px solid #94a3b8; font-size:11px; color:#fef08a;">${p.is_investor ? '+ '+expFormatINR(refundAmt) : '-'}</th>`; 
-            pFinalFooters += `<th style="padding:8px; border-left:1px solid #94a3b8; font-size:14px; font-weight:900; color:${finalPayout < 0 ? '#fca5a5' : '#fff'}">${expFormatINR(finalPayout)}</th>`; 
+            
+            let refundText = refundAmt > 0 ? '+ ' + expFormatINR(refundAmt) : '-';
+            pRefundFooters += `<th style="padding:8px; border-left:1px solid #94a3b8; font-size:11px; color:#fef08a;">${refundText}</th>`; 
+            
+            let finalPayoutText = finalPayout < 0 ? 'DUE: ' + expFormatINR(Math.abs(finalPayout)) : expFormatINR(finalPayout);
+            pFinalFooters += `<th style="padding:8px; border-left:1px solid #94a3b8; font-size:14px; font-weight:900; color:${finalPayout < 0 ? '#fca5a5' : '#4ade80'}">${finalPayoutText}</th>`; 
         });
 
         html += `<tr style="background:#334155; color:#fff; font-size:12px;">
@@ -803,12 +918,12 @@ jQuery(document).ready(function($) {
         </tr>`;
 
         html += `<tr style="background:#1e293b; color:#94a3b8; font-size:11px; border-top:1px dotted #475569;">
-            <th style="padding:8px; text-align:right;" colspan="6">Owner Expense Reimbursement:</th>
+            <th style="padding:8px; text-align:right;" colspan="6">Individual Capital / Expense Reimbursements:</th>
             ${pRefundFooters}
         </tr>`;
 
         html += `<tr style="background:#0f172a; color:#fff; font-size:12px; border-top:2px solid #000;">
-            <th style="padding:8px; text-align:right; color:#38bdf8;" colspan="6">TOTAL CASH PAYOUT FROM BANK:</th>
+            <th style="padding:8px; text-align:right; color:#38bdf8;" colspan="6">NET PARTNER PAYOUT / (AMOUNT DUE):</th>
             ${pFinalFooters}
         </tr></table>`;
 

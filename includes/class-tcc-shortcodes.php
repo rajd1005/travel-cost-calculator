@@ -37,6 +37,16 @@ function tcc_get_global_settings() {
     ));
 }
 
+// --- INTERCONNECTIVITY AJAX SYNC ---
+add_action('wp_ajax_tcc_get_sync_data', 'tcc_ajax_get_sync_data');
+function tcc_ajax_get_sync_data() {
+    wp_send_json_success(array(
+        'master' => tcc_get_safe_master_data(),
+        'global' => tcc_get_global_settings()
+    ));
+}
+// -----------------------------------
+
 function tcc_render_calculator_form() {
     if ( ! is_user_logged_in() ) {
         return '<div style="padding:40px; text-align:center; color:#dc2626; font-family:sans-serif; background:#fee2e2; border:1px solid #f87171; border-radius:6px; margin:20px 0;"><strong>Access Denied:</strong> Please log in to access the Travel Calculator.</div>';
@@ -73,12 +83,17 @@ function tcc_render_calculator_form() {
                     </select>
                 </div>
 
-                <div id="pmt_quote_actions" style="display:none; gap:10px; margin-bottom:15px; flex-wrap:wrap;">
-                    <button type="button" id="pmt_view_quote_btn" class="tcc-btn-secondary" style="margin:0; flex:1; min-width:90px; background:#f0f9ff; color:#0284c7; border-color:#bae6fd;">👁️ View</button>
-                    <button type="button" id="pmt_copy_quote_btn" class="tcc-btn-secondary" style="margin:0; flex:1; min-width:90px; background:#f0fdf4; color:#16a34a; border-color:#bbf7d0;">📋 Link</button>
-                    <button type="button" id="pmt_edit_quote_btn" class="tcc-btn-secondary" style="margin:0; flex:1; min-width:110px;">✏️ Client Info</button>
-                    <button type="button" id="pmt_delete_quote_btn" class="tcc-btn-del" style="margin:0; flex:1; min-width:90px; background:#fee2e2; color:#dc2626; border-color:#f87171;">🗑️ Delete</button>
-                </div>
+<div id="pmt_quote_actions" style="display:none; gap:10px; margin-bottom:15px; flex-wrap:wrap;">
+    <button type="button" id="pmt_view_quote_btn" class="tcc-btn-secondary" style="margin:0; flex:1; min-width:90px; background:#f0f9ff; color:#0284c7; border-color:#bae6fd;">👁️ View</button>
+    <button type="button" id="pmt_copy_quote_btn" class="tcc-btn-secondary" style="margin:0; flex:1; min-width:90px; background:#f0fdf4; color:#16a34a; border-color:#bbf7d0;">📋 Link</button>
+    <button type="button" id="pmt_edit_quote_btn" class="tcc-btn-secondary" style="margin:0; flex:1; min-width:110px;">✏️ Client Info</button>
+    
+    <button type="button" id="pmt_duplicate_quote_btn" class="tcc-btn-secondary" style="margin:0; flex:1; min-width:100px; background:#fffbeb; color:#d97706; border-color:#fde68a;">📑 Duplicate</button>
+    
+    <button type="button" id="pmt_load_edit_btn" class="tcc-btn-primary" style="margin:0; flex:1; min-width:120px;">📥 Load to Editor</button>
+
+    <button type="button" id="pmt_delete_quote_btn" class="tcc-btn-del" style="margin:0; flex:1; min-width:90px; background:#fee2e2; color:#dc2626; border-color:#f87171;">🗑️ Delete</button>
+</div>
 
                 <div id="pmt_edit_client_wrapper" style="display:none; background:#fff; padding:15px; border:1px solid #cbd5e1; border-radius:4px; margin-bottom:15px;">
                     <h4 style="margin:0 0 10px 0; color:#334155;">Update Client Details Only</h4>
@@ -94,18 +109,34 @@ function tcc_render_calculator_form() {
                 </div>
 
                 <div id="pmt_dashboard" style="display:none; margin-top:15px; border-top:2px solid #e2e8f0; padding-top:15px;">
-                    <div class="tcc-grid-3" style="background:#fff; padding:10px; border-radius:4px; border:1px solid #e2e8f0; margin-bottom:10px; text-align:center;">
-                        <div>
+                    
+                    <div style="display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px; background:#fff; padding:10px; border-radius:4px; border:1px solid #e2e8f0; margin-bottom:10px; text-align:center;">
+                        <div style="flex:1; min-width:80px;">
                             <div style="font-size:11px; color:#64748b; text-transform:uppercase;">Total Value</div>
-                            <div id="pmt_total_val" style="font-weight:bold; font-size:16px; color:#0f172a;">₹0.00</div>
+                            <div id="pmt_total_val" style="font-weight:bold; font-size:15px; color:#0f172a;">₹0.00</div>
                         </div>
-                        <div>
-                            <div style="font-size:11px; color:#64748b; text-transform:uppercase;">Total Received</div>
-                            <div id="pmt_received_val" style="font-weight:bold; font-size:16px; color:#16a34a;">₹0.00</div>
+                        <div style="flex:1; min-width:80px;">
+                            <div style="font-size:11px; color:#64748b; text-transform:uppercase;">Net Profit</div>
+                            <div id="pmt_profit_val" style="font-weight:bold; font-size:15px; color:#0ea5e9;">₹0.00</div>
                         </div>
-                        <div>
+                        <div style="flex:1; min-width:80px;">
+                            <div style="font-size:11px; color:#64748b; text-transform:uppercase;">Received</div>
+                            <div id="pmt_received_val" style="font-weight:bold; font-size:15px; color:#16a34a;">₹0.00</div>
+                        </div>
+                        <div style="flex:1; min-width:80px;">
                             <div style="font-size:11px; color:#64748b; text-transform:uppercase;">Balance Due</div>
-                            <div id="pmt_balance_val" style="font-weight:bold; font-size:16px; color:#dc2626;">₹0.00</div>
+                            <div id="pmt_balance_val" style="font-weight:bold; font-size:15px; color:#dc2626;">₹0.00</div>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; border:1px solid #e2e8f0; padding:10px; border-radius:4px; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+                        <div>
+                            <strong style="font-size:13px; color:#334155;">Post-Quote Flat Discount (₹):</strong>
+                            <p style="font-size:11px; color:#64748b; margin:0;">Given to customer after quote generation.</p>
+                        </div>
+                        <div style="display:flex; gap:5px;">
+                            <input type="number" id="pmt_post_discount" placeholder="0" min="0" step="0.01" style="width:100px; padding:4px 8px; border:1px solid #ccc; border-radius:3px;">
+                            <button type="button" id="pmt_save_discount_btn" class="tcc-btn-secondary" style="margin:0; padding:4px 10px;">Apply</button>
                         </div>
                     </div>
 
