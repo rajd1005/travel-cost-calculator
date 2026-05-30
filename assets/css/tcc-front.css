@@ -1,0 +1,488 @@
+.tcc-ft-container {
+    max-width: 480px;
+    margin: 0 auto;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px; /* Super compact outer padding (was 20px) */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+/* === Main Header / Tour Title === */
+.tcc-ft-title {
+    margin: -12px -12px 16px -12px; /* Adjusted to match new container padding */
+    padding: 14px 12px; /* Thinner header bar */
+    font-size: 16px; /* Slightly smaller text */
+    font-weight: 800;
+    color: #ffffff; 
+    text-align: center;
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); 
+    border-radius: 11px 11px 0 0; 
+    border-bottom: none; 
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); 
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); 
+    letter-spacing: 0.5px;
+    position: relative;
+}
+
+/* Optional: Adds a subtle, glossy top-light effect for a highly polished app feel */
+.tcc-ft-title::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%);
+    border-radius: 11px 11px 0 0;
+    pointer-events: none;
+}
+.tcc-ft-card {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 12px; /* Tighter inner padding (was 16px) */
+    margin-bottom: 12px; /* Less space between boxes (was 16px) */
+}
+.tcc-ft-card label {
+    display: block;
+    font-size: 11px; /* Smaller labels */
+    font-weight: 700;
+    color: #475569;
+    margin-bottom: 6px; /* Reduced gap below labels */
+    text-transform: uppercase;
+}
+
+.tcc-ft-card input[type="text"], 
+.tcc-ft-card input[type="tel"], 
+.tcc-ft-card input[type="email"] {
+    width: 100%;
+    padding: 10px; /* Thinner input fields */
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 14px;
+    margin-bottom: 10px; /* Less space between inputs */
+    box-sizing: border-box;
+}
+
+/* === Match the Image: Date Buttons === */
+.tcc-ft-date-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px;
+}
+.fd-date-btn-modern {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 10px;
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+.fd-date-btn-modern.active {
+    border-color: #10b981;
+    background: #f0fdf4;
+}
+.fd-date-check {
+    position: absolute;
+    top: -8px; right: -8px;
+    background: #10b981;
+    color: #fff;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    opacity: 0;
+    transform: scale(0);
+    transition: 0.2s;
+}
+.fd-date-btn-modern.active .fd-date-check {
+    opacity: 1;
+    transform: scale(1);
+}
+.fd-date-main-text {
+    font-size: 14px;
+    font-weight: 800;
+    color: #334155;
+    margin-bottom: 2px;
+}
+.fd-date-btn-modern.active .fd-date-main-text { color: #065f46; }
+.fd-date-sub-text {
+    font-size: 11px;
+    color: #64748b;
+    font-weight: 600;
+}
+.fd-date-btn-modern.active .fd-date-sub-text { color: #047857; }
+
+
+/* === Match the Image: Date Buttons === */
+.tcc-ft-date-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(115px, 1fr)); 
+    gap: 8px; 
+}
+
+.fd-date-btn-modern {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;       /* Centers horizontally */
+    justify-content: center;   /* Centers vertically */
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 8px 4px;          
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    text-align: center;        /* Enforces center alignment */
+    min-height: 54px;          
+}
+
+.fd-date-btn-modern:hover {
+    border-color: #cbd5e1;
+}
+
+.fd-date-btn-modern.active {
+    border-color: #10b981;
+    background: #f0fdf4;
+}
+
+.fd-date-check {
+    position: absolute;
+    top: -8px; right: -8px;
+    background: #10b981;
+    color: #fff;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    opacity: 0;
+    transform: scale(0);
+    transition: 0.2s;
+    z-index: 2;
+}
+
+.fd-date-btn-modern.active .fd-date-check {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.fd-date-main-text {
+    font-size: 13px;
+    font-weight: 800;
+    color: #334155;
+    margin-bottom: 2px; 
+    display: flex;
+    align-items: center;
+    justify-content: center; /* Forces the calendar icon and date text to center properly */
+    gap: 4px;
+    width: 100%;
+    line-height: 1.2;
+}
+
+.fd-date-btn-modern.active .fd-date-main-text { color: #065f46; }
+
+.fd-date-sub-text {
+    font-size: 13px;         /* Increased from 11px to 13px to match date */
+    font-weight: 700;        /* Thicker weight to match the date styling */
+    color: #64748b;
+    width: 100%;
+    display: block;
+    text-align: center;      /* Enforces perfect horizontal centering */
+    line-height: 1.2;        /* Controls spacing to keep vertical centering tight */
+}
+
+.fd-date-btn-modern.active .fd-date-sub-text { color: #047857; }
+
+/* =========================================================
+   NUMBER OF TRAVELERS - COMPACT MOBILE-FIRST LIST
+========================================================= */
+
+/* The outer wrapper for the traveler list */
+.tcc-ft-pax-grid {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #ffffff;
+    overflow: hidden; /* Keeps child borders inside the radius */
+}
+
+/* Individual Traveler Row */
+.tcc-ft-pax-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px; /* Extremely compact rows (was 12px 14px) */
+    border-bottom: 1px solid #e2e8f0;
+    transition: background 0.2s ease;
+}
+
+.tcc-ft-pax-item:last-child {
+    border-bottom: none; /* Removes double border at the bottom */
+}
+
+/* Active/Touch state for mobile */
+.tcc-ft-pax-item:active {
+    background: #f8fafc;
+}
+
+/* Label & Price Section - Stacked tightly */
+.tcc-ft-pax-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.tcc-ft-pax-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #334155;
+}
+
+.tcc-ft-pax-price {
+    font-size: 12px;
+    font-weight: 600;
+    color: #059669; /* Emerald green to indicate price clearly */
+}
+
+/* Compact +/- Quantity Selector */
+.tcc-ft-qty {
+    display: flex;
+    align-items: stretch;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    height: 30px; /* Shorter buttons */
+    width: 95px; /* Narrower overall width */
+    background: #fff;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05); 
+    flex-shrink: 0;   
+}
+
+.tcc-ft-btn-qty {
+    flex: 0 0 30px; /* Match height exactly */
+    /* Keep other button styles the same */
+    background: #f1f5f9;
+    border: none;
+    font-size: 16px;
+    font-weight: bold;
+    color: #475569;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0; margin: 0;
+    outline: none;
+    transition: 0.1s ease;
+    touch-action: manipulation;
+}
+
+.tcc-ft-btn-qty:hover { 
+    background: #e2e8f0; 
+    color: #0f172a; 
+}
+
+.tcc-ft-btn-qty:active { 
+    background: #cbd5e1; 
+}
+
+.tcc-ft-btn-qty.minus { border-right: 1px solid #cbd5e1; }
+.tcc-ft-btn-qty.plus { border-left: 1px solid #cbd5e1; }
+
+.tcc-ft-pax-val {
+    flex: 1;          
+    min-width: 0;     
+    text-align: center;
+    border: none !important;
+    background: transparent !important;
+    font-weight: 800;
+    font-size: 13px; /* Slightly smaller for compactness */
+    color: #0f172a;
+    padding: 0 !important; margin: 0 !important;
+    pointer-events: none;
+    box-sizing: border-box;
+    -moz-appearance: textfield; 
+}
+
+/* Hides default number arrows on Chrome/Safari */
+.tcc-ft-pax-val::-webkit-inner-spin-button, 
+.tcc-ft-pax-val::-webkit-outer-spin-button { 
+    -webkit-appearance: none; 
+    margin: 0; 
+}
+
+/* === Price Breakdown === */
+.tcc-ft-breakdown {
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 12px; /* Tighter padding */
+    margin-bottom: 12px; /* Tighter margin below */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.tcc-ft-row { 
+    display: flex; 
+    justify-content: space-between; 
+    font-size: 12px; /* Slightly smaller */
+    color: #64748b; 
+    margin-bottom: 4px; /* Dramatically reduced gap between items */
+    font-weight: 500;
+}
+
+.tcc-ft-row span:last-child {
+    color: #334155;
+    font-weight: 700;
+}
+
+/* Upgraded Grand Total Highlight Box */
+.tcc-ft-grand {
+    font-size: 15px; /* Scaled down slightly */
+    font-weight: 800;
+    color: #1e40af; 
+    background: #eff6ff; 
+    margin-top: 8px; /* Tighter top gap */
+    padding: 10px 12px; /* Thinner box */
+    border-radius: 6px;
+    border: 1px solid #bfdbfe;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tcc-ft-grand span:last-child {
+    color: #1d4ed8; 
+    font-size: 18px; /* Slightly smaller big text */
+    font-weight: 900;
+}
+
+
+/* === Navigation Actions === */
+.tcc-ft-actions { 
+    display: flex; 
+    gap: 8px; /* Tighter, uniform gap between buttons */
+    margin-top: 8px; /* Consistent spacing below the price breakdown */
+}
+
+/* Primary "Continue" Button - Vibrant Indigo Gradient */
+.tcc-ft-btn-main {
+    flex: 1;
+    background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
+    color: #ffffff;
+    border: none;
+    padding: 10px 12px; /* Perfect, compact padding */
+    font-size: 14px;    /* Uniform font size */
+    font-weight: 700;
+    border-radius: 6px; /* Slightly tighter radius for a modern compact feel */
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+    box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.25), 0 2px 4px -1px rgba(79, 70, 229, 0.1);
+    line-height: 1.4;   /* Locks vertical text alignment */
+    touch-action: manipulation; /* Faster tap response on mobile */
+}
+
+.tcc-ft-btn-main:hover {
+    transform: translateY(-2px); 
+    box-shadow: 0 8px 12px -1px rgba(79, 70, 229, 0.3);
+}
+
+.tcc-ft-btn-main:active { 
+    transform: scale(0.98) translateY(0); 
+}
+
+/* WhatsApp Submit Button - Vibrant Emerald Gradient */
+.tcc-ft-btn-wa {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.25), 0 2px 4px -1px rgba(16, 185, 129, 0.1);
+}
+
+.tcc-ft-btn-wa:hover { 
+    background: linear-gradient(135deg, #059669 0%, #047857 100%); 
+    box-shadow: 0 8px 12px -1px rgba(16, 185, 129, 0.3);
+}
+
+/* Back Button - Clean Outline Style */
+.tcc-ft-btn-back {
+    background: #ffffff;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+    padding: 10px 12px; /* EXACTLY matches the main buttons */
+    font-size: 14px;    /* EXACTLY matches the main buttons */
+    font-weight: 700;
+    border-radius: 6px; /* EXACTLY matches the main buttons */
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    line-height: 1.4;   /* Locks vertical text alignment */
+    touch-action: manipulation;
+}
+
+.tcc-ft-btn-back:hover { 
+    background: #f8fafc; 
+    color: #0f172a;
+    border-color: #94a3b8;
+}
+
+.tcc-ft-btn-back:active { 
+    background: #e2e8f0; 
+}
+
+/* =========================================================
+   SUCCESS / GREETINGS SCREEN
+========================================================= */
+.tcc-ft-success-card {
+    text-align: center;
+    padding: 30px 20px !important; /* Extra padding to make it feel spacious */
+    border: 1px solid #10b981 !important; /* Emerald border to denote success */
+    background: #f0fdf4 !important; /* Light green tint */
+}
+
+.tcc-ft-success-icon {
+    font-size: 56px;
+    margin-bottom: 12px;
+    line-height: 1;
+    animation: tccPopIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.tcc-ft-success-title {
+    font-size: 18px;
+    font-weight: 800;
+    color: #065f46;
+    margin: 0 0 10px 0;
+}
+
+.tcc-ft-success-desc {
+    font-size: 13px;
+    font-weight: 500;
+    color: #047857;
+    line-height: 1.5;
+    margin: 0;
+}
+
+@keyframes tccPopIn {
+    0% { transform: scale(0.3); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+/* === FOMO: Sold Out Date Button === */
+.fd-date-btn-modern.sold-out {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+    cursor: not-allowed;
+    opacity: 0.65;
+    box-shadow: inset 0 0 5px rgba(0,0,0,0.02);
+}
+.fd-date-btn-modern.sold-out:hover {
+    border-color: #e2e8f0;
+    transform: none; /* Disables hover lift */
+}

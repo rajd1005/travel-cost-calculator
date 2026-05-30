@@ -1,0 +1,550 @@
+/* Global Wrapper */
+.tcc-wrapper {
+    font-family: inherit;
+    max-width: 100%;
+    margin: 0 auto;
+    color: #333;
+    font-size: 13px;
+}
+
+.tcc-wrapper * { box-sizing: border-box; }
+
+/* Ultra-Compact Panels */
+.tcc-card {
+    background: #fff;
+    padding: 12px 15px;
+    margin-bottom: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+}
+
+.tcc-card-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0 0 10px 0;
+    color: #0f172a;
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 8px;
+}
+
+/* Grids (Tight Spacing) */
+.tcc-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 6px; }
+.tcc-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 6px; }
+
+/* Native-Style Form Elements */
+.tcc-form-group { margin-bottom: 8px; }
+.tcc-form label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 4px;
+}
+.tcc-form input, .tcc-form select, .tcc-form textarea {
+    width: 100%;
+    border-radius: 3px;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    font-size: 13px;
+    color: #1e293b;
+    margin-bottom: 0 !important;
+}
+
+.tcc-form input, .tcc-form select {
+    height: 32px !important;
+    padding: 4px 8px;
+}
+
+/* Multi-select specific height fix */
+.tcc-form select[multiple] { 
+    height: 55px !important; 
+    padding: 4px; 
+    overflow-y: auto;
+}
+
+.tcc-form input:focus, .tcc-form select:focus, .tcc-form textarea:focus {
+    border-color: #b93b59;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(185, 59, 89, 0.1);
+}
+
+/* Repeaters (Transport & Hotels) */
+.tcc-repeater-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 6px;
+}
+.tcc-repeater-row > * { flex: 1; }
+
+/* BUTTONS */
+.tcc-wrapper .tcc-btn-primary, 
+.tcc-wrapper .tcc-btn-secondary, 
+.tcc-wrapper .tcc-repeater-row .tcc-btn-del,
+.tcc-wrapper .tcc-btn-del {
+    background-color: transparent !important; 
+    color: #b93b59 !important;                
+    border: 1px solid #b93b59 !important;     
+    font-size: 13px !important;
+    padding: 4px 12px !important;
+    border-radius: 3px !important;
+    cursor: pointer !important;
+    font-weight: 600 !important;
+    text-align: center !important;
+    transition: 0.2s ease !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    height: 32px !important; 
+    box-shadow: none !important;
+}
+
+.tcc-wrapper .tcc-btn-primary {
+    background-color: #b93b59 !important;
+    color: #ffffff !important;
+    min-width: 150px !important;
+    margin-top: 10px !important;
+}
+
+.tcc-wrapper .tcc-btn-primary:hover {
+    background-color: #9d314b !important;
+}
+
+/* Hover effects */
+.tcc-wrapper .tcc-btn-secondary:hover, 
+.tcc-wrapper .tcc-repeater-row .tcc-btn-del:hover,
+.tcc-wrapper .tcc-btn-del:hover { 
+    background-color: #f1f5f9 !important; 
+    color: #9d314b !important;
+}
+
+.tcc-wrapper .tcc-btn-del {
+    background-color: #fee2e2 !important;
+    color: #dc2626 !important;
+    border-color: #f87171 !important;
+}
+.tcc-wrapper .tcc-btn-del:hover {
+    background-color: #fecaca !important;
+}
+
+.tcc-wrapper .tcc-repeater-row .tcc-btn-del {
+    flex: 0 0 32px !important;
+    padding: 0 !important;
+}
+
+/* Light & Clean Live Preview Panel */
+.tcc-preview-panel { 
+    background: #f8fafc; 
+    border: 1px solid #e2e8f0;
+    border-radius: 4px; 
+    padding: 12px; 
+    margin-top: 8px; 
+    color: #333;
+}
+.tcc-preview-val { font-size: 20px; font-weight: 800; color: #0f172a; }
+.tcc-preview-profit { color: #16a34a; }
+.tcc-preview-loss { color: #dc2626; }
+.tcc-preview-sub { 
+    display: flex; 
+    justify-content: space-between; 
+    font-size: 12px; 
+    margin-top: 8px; 
+    padding-top: 8px; 
+    border-top: 1px dashed #cbd5e1; 
+}
+
+/* Accordions for Settings */
+.tcc-accordion { margin-bottom: 6px; border: 1px solid #cbd5e1; border-radius: 4px; }
+.tcc-accordion-header {
+    background: #f8fafc;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    color: #1e293b;
+}
+.tcc-accordion-body { padding: 12px; display: none; background: #fff; }
+
+/* --- MULTI-STEP WIZARD STYLES --- */
+.tcc-step {
+    display: none;
+    animation: tccFadeIn 0.3s ease-in-out;
+}
+.tcc-step.active {
+    display: block;
+}
+@keyframes tccFadeIn { 
+    from { opacity: 0; transform: translateY(5px); } 
+    to { opacity: 1; transform: translateY(0); } 
+}
+
+.tcc-step-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 12px;
+    margin-top: 15px;
+    margin-bottom: 15px;
+}
+
+/* --- RICH TEXT EDITOR STYLES --- */
+.tcc-rte-container {
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    background: #fff;
+    overflow: hidden;
+}
+.tcc-rte-toolbar {
+    background: #f1f5f9;
+    padding: 6px;
+    border-bottom: 1px solid #cbd5e1;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.tcc-rte-btn {
+    background: #fff !important; 
+    border: 1px solid #cbd5e1 !important; 
+    border-radius: 3px !important; 
+    padding: 4px 10px !important; 
+    font-size: 12px !important; 
+    cursor: pointer !important; 
+    color: #475569 !important;
+    font-family: inherit !important;
+    font-weight: 600 !important;
+    transition: 0.2s ease !important;
+    height: 26px !important;
+}
+.tcc-rte-btn:hover { background: #e2e8f0 !important; color: #0f172a !important; border-color: #94a3b8 !important; }
+.tcc-rte-editor {
+    padding: 10px; 
+    min-height: 80px; 
+    font-size: 13px; 
+    outline: none; 
+    line-height: 1.6;
+    color: #334155;
+}
+.tcc-rte-editor:focus {
+    background: #f8fafc;
+}
+.tcc-rte-editor ul, .tcc-rte-editor ol { padding-left: 25px; margin: 8px 0; }
+.tcc-rte-editor p { margin: 0 0 8px 0; }
+
+/* --- MOBILE OPTIMIZATIONS & DAY ROW REDESIGN --- */
+@media (max-width: 600px) {
+    .tcc-grid-3, .tcc-grid-2 { grid-template-columns: 1fr; gap: 6px; }
+    
+    .tcc-repeater-row { 
+        flex-direction: column; 
+        align-items: stretch; 
+        border: 1px solid #e2e8f0; 
+        padding: 8px; 
+        border-radius: 4px; 
+        background: #f8fafc;
+    }
+    
+    .tcc-wrapper .tcc-repeater-row .tcc-btn-del { 
+        flex: auto !important; 
+        height: 32px !important; 
+        margin-top: 4px !important; 
+    }
+    
+    /* Day Row Mobile Redesign - Exact Mockup Layout */
+    .tcc-day-row {
+        padding: 12px !important;
+    }
+
+    /* Target the first container holding the header & dropdowns */
+    .tcc-day-row > div:first-child {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+        margin-bottom: 10px !important;
+    }
+    
+    /* 1. Drag handle & Label */
+    .tcc-day-row > div:first-child .drag-handle { order: 1; }
+    .tcc-day-row > div:first-child .tcc-day-label { order: 2; }
+    
+    /* 2. Delete button moved to top right */
+    .tcc-day-row > div:first-child .tcc-remove-day { order: 3; margin-left: auto !important; }
+    
+    /* 3. Title Input (Full Width on its own line) */
+    .tcc-day-row > div:first-child .tcc-day-input { 
+        order: 4; 
+        flex: 1 1 100% !important; 
+        margin-top: 4px !important; 
+        margin-bottom: 4px !important;
+    }
+    
+    /* 4. Dropdowns & Controls */
+    .tcc-day-row > div:first-child .tcc-day-stay-place { 
+        order: 5; 
+        flex: 1 1 100% !important; 
+        margin-bottom: 4px !important;
+    }
+    .tcc-day-row > div:first-child .tcc-day-preset-dropdown { order: 6; flex: 1 1 auto !important; }
+    .tcc-day-row > div:first-child .tcc-save-day-preset { order: 7; }
+    .tcc-day-row > div:first-child .tcc-insert-day-btn { order: 8; }
+    
+    /* Second container holding RTE and Image */
+    .tcc-day-row > div:nth-child(2) {
+        flex-direction: column !important;
+        gap: 10px !important;
+    }
+    
+    /* Ensure RTE and Image take full width */
+    .tcc-day-row > div:nth-child(2) > div {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+}
+
+/* --- TABLE RESPONSIVE SCROLL FOR SMALL SCREENS --- */
+.tcc-table-responsive {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+    width: 100%;
+    display: block;
+}
+
+.tcc-table-responsive table {
+    min-width: 600px; /* Forces horizontal scroll on devices smaller than 600px */
+    width: 100%;
+}
+
+/* Ensure description columns don't stretch indefinitely but still look good */
+.tcc-table-responsive table td {
+    white-space: normal; 
+}
+
+
+/* --- ULTIMATE EMOJI & ICON CATCHER FOR THE BACKEND EDITOR --- */
+/* Lock text icons/emojis to surrounding text size in the Quill Editor (Aggressive Catch-All for Pasting) */
+.ql-editor img.emoji,
+.tcc-quill-editor img.emoji,
+.tcc-rte-editor img.emoji,
+.ql-editor img[class*="emoji" i],
+.tcc-quill-editor img[class*="emoji" i],
+.tcc-rte-editor img[class*="emoji" i],
+.ql-editor img[class*="icon" i],
+.tcc-quill-editor img[class*="icon" i],
+.tcc-rte-editor img[class*="icon" i],
+.ql-editor img[src*="emoji" i],
+.tcc-quill-editor img[src*="emoji" i],
+.tcc-rte-editor img[src*="emoji" i],
+.ql-editor img[src*="s.w.org" i],
+.tcc-quill-editor img[src*="s.w.org" i],
+.tcc-rte-editor img[src*="s.w.org" i],
+.ql-editor img[src*="twimg" i],
+.tcc-quill-editor img[src*="twimg" i],
+.tcc-rte-editor img[src*="twimg" i],
+.ql-editor img[src*="gstatic" i],
+.tcc-quill-editor img[src*="gstatic" i],
+.tcc-rte-editor img[src*="gstatic" i],
+.ql-editor img[src*="icon" i],
+.tcc-quill-editor img[src*="icon" i],
+.tcc-rte-editor img[src*="icon" i],
+.ql-editor img[src*="apple" i],
+.tcc-quill-editor img[src*="apple" i],
+.tcc-rte-editor img[src*="apple" i] {
+    display: inline-block !important;
+    width: 1.2em !important;
+    height: 1.2em !important;
+    margin: 0 0.1em !important;
+    vertical-align: -0.2em !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    background: none !important;
+}
+
+/* Fallback constraint so NO pasted image can ever blow up the editor */
+.ql-editor img {
+    max-width: 100% !important;
+    height: auto !important;
+}
+/* --- FIXED DEPARTURE DATE BUTTONS (Mobile First & Modern) --- */
+
+/* Override inline flex styles from PHP wrapper */
+#fd_date_buttons {
+    display: grid !important;
+    grid-template-columns: 1fr; /* Mobile-first: 1 column */
+    gap: 12px;
+    margin-top: 10px;
+}
+
+/* Tablet (2 columns) */
+@media (min-width: 480px) {
+    #fd_date_buttons { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+/* Desktop (3 columns) */
+@media (min-width: 768px) {
+    #fd_date_buttons { grid-template-columns: repeat(3, 1fr) !important; }
+}
+
+/* --- FIXED DEPARTURE DATE BUTTONS (Ultra Compact & Tiny) --- */
+
+#fd_date_buttons {
+    display: grid !important;
+    /* Forces 2 columns immediately on mobile so they don't take up vertical space */
+    grid-template-columns: repeat(2, 1fr) !important; 
+    gap: 6px !important; /* Very tight spacing */
+    margin-top: 6px !important;
+}
+
+/* 3 columns on standard mobile/tablet */
+@media (min-width: 480px) {
+    #fd_date_buttons { grid-template-columns: repeat(3, 1fr) !important; }
+}
+
+/* 4 columns on desktop */
+@media (min-width: 768px) {
+    #fd_date_buttons { grid-template-columns: repeat(4, 1fr) !important; }
+}
+
+.tcc-wrapper .fd-date-btn-modern {
+    background: #fff !important;
+    border: 1px solid #cbd5e1 !important; /* Thinner border */
+    border-radius: 4px !important; /* Sharper corners */
+    padding: 6px 4px !important; /* Drastically reduced padding */
+    cursor: pointer !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    transition: all 0.15s ease-in-out !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.02) !important;
+    position: relative;
+    
+    height: auto !important; 
+    min-height: 42px !important; /* Very short height */
+    white-space: normal !important;
+    line-height: 1.2 !important;
+}
+
+.tcc-wrapper .fd-date-btn-modern:hover:not(:disabled) {
+    background: #f8fafc !important;
+    border-color: #94a3b8 !important;
+}
+
+/* Selected State */
+.tcc-wrapper .fd-date-btn-modern.selected {
+    background: #f0fdf4 !important;
+    border-color: #22c55e !important; 
+    border-width: 2px !important; /* Thicker only when active */
+    padding: 5px 3px !important; /* Offset the 2px border so it doesn't jump */
+}
+
+/* Disabled/Sold Out State */
+.tcc-wrapper .fd-date-btn-modern:disabled {
+    background: #f1f5f9 !important;
+    border-color: #e2e8f0 !important;
+    border-style: dashed !important;
+    opacity: 0.6;
+    cursor: not-allowed !important;
+}
+
+.fd-date-main-text {
+    font-size: 11px !important; /* Tiny font */
+    font-weight: 800 !important;
+    color: #334155 !important;
+    margin-bottom: 3px !important; /* Tighter gap between texts */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: inherit !important;
+    width: 100%;
+    word-break: break-word;
+}
+
+.tcc-wrapper .fd-date-btn-modern.selected .fd-date-main-text {
+    color: #15803d !important;
+}
+
+/* Status Badges */
+.fd-date-sub-text {
+    font-size: 9px !important; /* Micro badge font */
+    font-weight: 700 !important;
+    padding: 2px 6px !important;
+    border-radius: 12px !important;
+    font-family: inherit !important;
+    display: inline-block;
+    letter-spacing: -0.2px;
+}
+
+.fd-seat-avail { 
+    background: #e0f2fe; 
+    color: #0369a1; 
+}
+
+.tcc-wrapper .fd-date-btn-modern.selected .fd-seat-avail { 
+    background: #22c55e; 
+    color: #fff; 
+}
+
+.fd-seat-sold { 
+    background: #fee2e2; 
+    color: #dc2626; 
+}
+
+/* Checkmark indicator - moved slightly outside to save inside space */
+.fd-date-check {
+    display: none;
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #22c55e;
+    color: #fff;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    font-size: 8px;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.tcc-wrapper .fd-date-btn-modern.selected .fd-date-check {
+    display: flex;
+/* --- CALCULATOR MODE TOGGLE (MATCHES FD DATES EXACTLY) --- */
+
+/* 1. Fully hide the default radio input so it doesn't break layout (Overriding WP Core CSS) */
+.tcc-wrapper input[type="radio"].tcc-hidden-radio-main,
+.tcc-wrapper .tcc-hidden-radio-main {
+    display: none !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    position: absolute !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+/* 2. Apply the exact green styling when the radio is checked */
+.tcc-wrapper .tcc-hidden-radio-main:checked + .tcc-mode-label-main {
+    background: #f0fdf4 !important;
+    border-color: #22c55e !important; 
+    border-width: 2px !important; 
+    padding: 5px 3px !important; /* Offsets the 2px border so it doesn't jump */
+}
+
+/* 3. Turn the main text green when selected */
+.tcc-wrapper .tcc-hidden-radio-main:checked + .tcc-mode-label-main .fd-date-main-text {
+    color: #15803d !important;
+}
+
+/* 4. Display the top-right green checkmark circle when selected */
+.tcc-wrapper .tcc-hidden-radio-main:checked + .tcc-mode-label-main .fd-date-check {
+    display: flex !important;
+}
