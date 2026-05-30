@@ -410,10 +410,15 @@ function tcc_render_calculator_form() {
                         
                         <div id="day-wise-wrapper" style="margin-bottom: 10px;"></div>
 
-                        <div style="display:flex; gap:5px; background: #f9f9f9; padding: 8px; border: 1px dashed #ccc; border-radius: 3px;">
-                            <input type="text" id="new_preset_name" placeholder="Preset Name (e.g. Kashmir 5D/4N)" style="flex:2; margin:0;">
-                            <button type="button" id="save_itinerary_preset" class="tcc-btn-secondary" style="flex:1; margin:0;">Save as Preset</button>
-                        </div>
+                        <div style="display:flex; gap:5px; background: #f9f9f9; padding: 8px; border: 1px dashed #ccc; border-radius: 3px; flex-wrap:wrap;">
+    <input type="text" id="new_preset_name" placeholder="Preset Name (e.g. Kashmir 5D/4N)" style="flex:2; margin:0;">
+    <button type="button" id="save_itinerary_preset" class="tcc-btn-secondary" style="flex:1; margin:0;">Save as Preset</button>
+    <button type="button" id="publish_as_package_btn" class="tcc-btn-secondary"
+        style="flex:1; margin:0; background:#10b981; color:#fff; border-color:#059669;"
+        title="Publish this preset as a public itinerary page for visitors">
+        🌐 Publish
+    </button>
+</div>
                         <div id="preset_msg" style="font-size:11px; color:#16a34a; margin-top:5px; display:none; font-weight:bold;">Saved!</div>
                     </div>
 
@@ -784,7 +789,6 @@ function tcc_render_settings_dashboard() {
                 </form>
             </div>
         </div>
-
         <div class="tcc-accordion">
             <div class="tcc-accordion-header">2. Destination Setup <span>&#9660;</span></div>
             <div class="tcc-accordion-body">
@@ -984,7 +988,9 @@ function tcc_render_settings_dashboard() {
                     </div>
                 </div>
             </div>
-        </div>
+    </div>
+
+    <?php if ( class_exists( 'TCC_Packages' ) ) { TCC_Packages::render_settings_panel(); } ?>
 
     <script>
     if (typeof jQuery !== 'undefined') {

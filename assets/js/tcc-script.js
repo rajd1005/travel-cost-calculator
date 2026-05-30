@@ -3578,4 +3578,223 @@ function syncDayWiseToRouting() {
     $('#add_hotel_room_type_btn').on('click', function() { addHotelRoomTypeRow(); });
     $(document).on('click', '.remove-hotel-rt', function() { $(this).closest('.hotel-rt-row').remove(); });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// PACKAGE PUBLISHING SYSTEM — replace the entire block in tcc-script.js
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Open publish modal ──────────────────────────────────────────────────────
+$('#publish_as_package_btn').on('click', function() {
+    let presetName = $('#itinerary_preset_select').val();
+    let dest       = $('#calc_destination').val();
+
+    if (!presetName) {
+        tccShowToast("Please load or save a preset first, then click Publish.", true);
+        return;
+    }
+    if (!dest) {
+        tccShowToast("Please select a destination first.", true);
+        return;
+    }
+
+    $('#pkg_modal_name').val(presetName);
+    $('#pkg_modal_preset_name').val(presetName);
+    $('#pkg_modal_destination').val(dest);
+    $('#pkg_modal_existing_id').val('');
+    $('#pkg_modal_msg').hide();
+
+    $('#pkg_modal_tour_link').html('<option value="">Loading…</option>');
+    $.post(tcc_ajax_obj.ajax_url, {
+        action: 'tcc_get_tours_for_pkg_link',
+        security: tcc_ajax_obj.nonce
+    }, function(res) {
+        let $sel = $('#pkg_modal_tour_link');
+        $sel.html('<option value="">— No Group Tour Linked —</option>');
+        if (res.success && res.data.length) {
+            res.data.forEach(function(t) {
+                $sel.append('<option value="' + t.id + '">' + t.title + '</option>');
+            });
+        }
+    });
+
+    $('#tcc-pkg-modal-wrap').css('display', 'flex');
+});
+
+// ── Close modal ─────────────────────────────────────────────────────────────
+$('#pkg_modal_cancel').on('click', function() {
+    $('#tcc-pkg-modal-wrap').hide();
+});
+
+// Click backdrop to close
+$('#tcc-pkg-modal-wrap').on('click', function(e) {
+    if ($(e.target).is('#tcc-pkg-modal-wrap')) {
+        $(this).hide();
+    }
+});
+
+// ── Submit publish ──────────────────────────────────────────────────────────
+$('#pkg_modal_submit').on('click', function() {
+    let displayName = $('#pkg_modal_name').val().trim();
+    let presetName  = $('#pkg_modal_preset_name').val();
+    let dest        = $('#pkg_modal_destination').val();
+    let tourId      = $('#pkg_modal_tour_link').val();
+    let existingId  = $('#pkg_modal_existing_id').val();
+
+    if (!displayName) {
+        tccShowToast("Please enter a public name for this package.", true);
+        return;
+    }
+
+    let btn = $(this);
+    let origText = btn.text();
+    btn.text('Publishing…').prop('disabled', true);
+
+    $.post(tcc_ajax_obj.ajax_url, {
+        action:         'tcc_publish_preset_package',
+        security:       tcc_ajax_obj.nonce,
+        destination:    dest,
+        preset_name:    presetName,
+        display_name:   displayName,
+        linked_tour_id: tourId,
+        existing_id:    existingId
+    }, function(res) {
+        btn.text(origText).prop('disabled', false);
+        if (res.success) {
+            $('#tcc-pkg-modal-wrap').hide();
+            tccShowToast(res.data.message, false);
+            setTimeout(function() {
+                if (confirm('Package published!\n\nOpen the live page in a new tab?')) {
+                    window.open(res.data.permalink, '_blank');
+                }
+            }, 300);
+            loadPublishedPackages();
+        } else {
+            let $msg = $('#pkg_modal_msg');
+            $msg.text('Error: ' + (res.data || 'Unknown error')).css('color', '#dc2626').show();
+        }
+    }).fail(function() {
+        btn.text(origText).prop('disabled', false);
+        tccShowToast('Server error. Please try again.', true);
+    });
+});
+
+// ── Load & render packages table in the settings panel ──────────────────────
+// NOTE: shortcode examples are shown in PHP panel only — NOT in this JS —
+// to prevent WordPress from executing [tcc_packages] inside AJAX HTML.
+function loadPublishedPackages() {
+    let $el = $('#tcc_packages_list');
+    if (!$el.length) return;
+
+    $el.html('<div style="padding:15px;text-align:center;color:#64748b;">Loading…</div>');
+
+    $.post(tcc_ajax_obj.ajax_url, {
+        action: 'tcc_list_all_packages',
+        security: tcc_ajax_obj.nonce
+    }, function(res) {
+        if (!res.success) return;
+
+        if (res.data.length === 0) {
+            $el.html('<div style="padding:20px;text-align:center;color:#64748b;">No packages published yet.<br><br>Load a preset in the <strong>Calculator</strong> tab, then click <strong style="color:#10b981;">🌐 Publish</strong>.</div>');
+            return;
+        }
+
+        let html = '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
+            + '<tr style="background:#f1f5f9;border-bottom:1px solid #cbd5e1;">'
+            + '<th style="padding:8px;text-align:left;">Package Name</th>'
+            + '<th style="padding:8px;text-align:center;">Destination</th>'
+            + '<th style="padding:8px;text-align:center;">Days</th>'
+            + '<th style="padding:8px;text-align:center;">Status</th>'
+            + '<th style="padding:8px;text-align:right;">Actions</th>'
+            + '</tr>';
+
+        res.data.forEach(function(p) {
+            let badge = p.status === 'publish'
+                ? '<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:10px;font-weight:700;font-size:10px;">🟢 Live</span>'
+                : '<span style="background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:10px;font-weight:700;font-size:10px;">⚫ Draft</span>';
+
+            html += '<tr style="border-bottom:1px solid #f8fafc;">'
+                + '<td style="padding:8px;font-weight:bold;color:#0f172a;">' + p.title + '</td>'
+                + '<td style="padding:8px;text-align:center;color:#64748b;">' + (p.destination || '—') + '</td>'
+                + '<td style="padding:8px;text-align:center;">' + (p.days || '—') + 'D</td>'
+                + '<td style="padding:8px;text-align:center;">' + badge + '</td>'
+                + '<td style="padding:8px;text-align:right;white-space:nowrap;">'
+                + '<a href="' + p.permalink + '" target="_blank" style="color:#2563eb;font-size:11px;margin-right:8px;text-decoration:underline;">View →</a>'
+                + '<button type="button" class="sync-pkg-btn tcc-btn-secondary" data-id="' + p.id + '" data-preset="' + p.preset_name + '" data-dest="' + (p.destination || '') + '" style="font-size:10px;padding:2px 8px;margin:0 4px 0 0;">🔄 Sync</button>'
+                + '<button type="button" class="toggle-pkg-btn" data-id="' + p.id + '" data-status="' + p.status + '" style="background:none;border:none;color:#d97706;cursor:pointer;font-size:11px;text-decoration:underline;margin-right:6px;">'
+                + (p.status === 'publish' ? 'Unpublish' : 'Publish')
+                + '</button>'
+                + '<button type="button" class="del-pkg-btn" data-id="' + p.id + '" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:11px;text-decoration:underline;">Del</button>'
+                + '</td></tr>';
+        });
+
+        html += '</table>';
+
+        // ── No shortcode display here on purpose ──
+        // Shortcode examples are rendered in PHP (render_settings_panel) with
+        // HTML-entity-escaped brackets &#91; &#93; so WordPress cannot execute
+        // them. Putting raw [tcc_packages] in JS-injected HTML risks execution
+        // by page builders / caching plugins.
+
+        $el.html(html);
+    });
+}
+
+// ── Sync (re-publish) a package from its saved preset ───────────────────────
+$(document).on('click', '.sync-pkg-btn', function() {
+    let id         = $(this).data('id');
+    let presetName = $(this).data('preset');
+    let dest       = $(this).data('dest');
+    let title      = $(this).closest('tr').find('td:first').text().trim();
+
+    $('#pkg_modal_name').val(title);
+    $('#pkg_modal_preset_name').val(presetName);
+    $('#pkg_modal_destination').val(dest);
+    $('#pkg_modal_existing_id').val(id);
+    $('#pkg_modal_msg').hide();
+
+    $('#pkg_modal_tour_link').html('<option value="">Loading…</option>');
+    $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_get_tours_for_pkg_link', security: tcc_ajax_obj.nonce }, function(r) {
+        let $sel = $('#pkg_modal_tour_link');
+        $sel.html('<option value="">— No Group Tour Linked —</option>');
+        if (r.success && r.data.length) {
+            r.data.forEach(function(t) {
+                $sel.append('<option value="' + t.id + '">' + t.title + '</option>');
+            });
+        }
+        $('#tcc-pkg-modal-wrap').css('display', 'flex');
+    });
+});
+
+// ── Toggle publish / draft ───────────────────────────────────────────────────
+$(document).on('click', '.toggle-pkg-btn', function() {
+    let id = $(this).data('id');
+    $.post(tcc_ajax_obj.ajax_url, {
+        action: 'tcc_toggle_package_status',
+        security: tcc_ajax_obj.nonce,
+        post_id: id
+    }, function(res) {
+        if (res.success) { tccShowToast('Status updated.', false); loadPublishedPackages(); }
+        else tccShowToast('Error updating status.', true);
+    });
+});
+
+// ── Delete package ───────────────────────────────────────────────────────────
+$(document).on('click', '.del-pkg-btn', function() {
+    if (!confirm('Permanently delete this package page?\nThis cannot be undone.')) return;
+    let id = $(this).data('id');
+    $.post(tcc_ajax_obj.ajax_url, {
+        action: 'tcc_delete_package_post',
+        security: tcc_ajax_obj.nonce,
+        post_id: id
+    }, function(res) {
+        if (res.success) { tccShowToast('Package deleted.', false); loadPublishedPackages(); }
+        else tccShowToast('Error deleting package.', true);
+    });
+});
+
+// ── Auto-load packages list when the accordion is opened ────────────────────
+$(document).on('click', '.tcc-accordion-header', function() {
+    if ($(this).next('.tcc-accordion-body').find('#tcc_packages_list').length) {
+        setTimeout(loadPublishedPackages, 200);
+    }
+});
 });

@@ -48,6 +48,7 @@ require_once plugin_dir_path( __FILE__ ) . 'includes/class-tcc-frontend-group.ph
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-tcc-frontend-ajax.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-tcc-fd-settings.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-tcc-api.php'; // Child Plugin REST API
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-tcc-packages.php';
 
 // REGISTER CUSTOM POST TYPE FOR QUOTES
 add_action( 'init', 'tcc_register_quote_cpt' );
@@ -249,5 +250,6 @@ function tcc_plugin_activation() {
     }
 
     tcc_register_quote_cpt();
+	TCC_Packages::register_cpt();
     flush_rewrite_rules(); 
 }
