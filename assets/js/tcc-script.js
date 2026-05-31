@@ -3582,6 +3582,68 @@ function syncDayWiseToRouting() {
 // PACKAGE PUBLISHING SYSTEM — replace the entire block in tcc-script.js
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ── Tour card builder — shortcode + triple price ─────────────────────────────
+function buildTourCard(id, title, shortcode, triplePrice) {
+    var ob = String.fromCharCode(91);  // [
+    var cb = String.fromCharCode(93);  // ]
+    var isNone = !id;
+    var sc = shortcode ? ob + shortcode + cb : '';
+
+    var priceHtml = triplePrice
+        ? '<span style="background:#dcfce7;color:#166534;font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;border:1px solid #bbf7d0;">'
+          + 'Triple ₹' + Number(triplePrice).toLocaleString('en-IN') + '/pp</span>'
+        : '';
+
+    var scHtml = sc
+        ? '<div style="display:flex;align-items:center;gap:6px;margin-top:5px;">'
+          + '<code class="tcc-tour-sc" style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:2px 7px;font-size:10px;color:#334155;cursor:copy;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="Click to copy">' + sc + '</code>'
+          + '<button type="button" class="tcc-copy-sc" data-sc="' + sc + '" style="background:none;border:1px solid #e2e8f0;border-radius:4px;padding:2px 7px;font-size:10px;color:#64748b;cursor:pointer;white-space:nowrap;flex-shrink:0;">Copy</button>'
+          + '</div>'
+        : '';
+
+    var $card = $('<div>', {
+        'class': 'tcc-tour-card' + (isNone ? ' tcc-tour-none' : ''),
+        'data-id': id || '',
+        'style': 'padding:10px 14px;cursor:pointer;border-bottom:1px solid #f1f5f9;transition:background .15s;'
+                + (isNone ? 'color:#94a3b8;font-size:12px;font-style:italic;' : '')
+    });
+
+    if (!isNone) {
+        $card.html(
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
+            + '<div style="font-size:12px;font-weight:700;color:#0f172a;">' + title + '</div>'
+            + priceHtml
+            + '</div>'
+            + scHtml
+        );
+    } else {
+        $card.text(title);
+    }
+
+    return $card;
+}
+
+// ── Tour card click — select / deselect ─────────────────────────────────────
+$(document).on('click', '.tcc-tour-card', function() {
+    var id = $(this).data('id');
+    $('.tcc-tour-card').css('background','').removeClass('tcc-tour-selected');
+    $(this).css('background', id ? '#eff6ff' : '#f8fafc').addClass('tcc-tour-selected');
+    $('#pkg_modal_tour_link').val(id || '');
+});
+
+// ── Copy shortcode ────────────────────────────────────────────────────────────
+$(document).on('click', '.tcc-copy-sc', function(e) {
+    e.stopPropagation(); // don't trigger card select
+    var sc = $(this).data('sc');
+    var $btn = $(this);
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(sc).then(function() {
+            $btn.text('Copied!').css('color','#166534');
+            setTimeout(function(){ $btn.text('Copy').css('color',''); }, 1500);
+        });
+    }
+});
+
 // ── Open publish modal ──────────────────────────────────────────────────────
 $('#publish_as_package_btn').on('click', function() {
     let presetName = $('#itinerary_preset_select').val();
@@ -3602,17 +3664,40 @@ $('#publish_as_package_btn').on('click', function() {
     $('#pkg_modal_existing_id').val('');
     $('#pkg_modal_msg').hide();
 
-    $('#pkg_modal_tour_link').html('<option value="">Loading…</option>');
+    // ── Capture pickup / drop right now from the live form ────────────────
+    let pickup = $.trim($('#calc_pickup_custom').val());
+    if (!pickup) {
+        let ps = $.trim($('#calc_pickup option:selected').text());
+        if (ps && ps.indexOf('--') === -1 && ps.indexOf('Select') === -1) pickup = ps;
+    }
+    let drop = $.trim($('#calc_drop_custom').val());
+    if (!drop) {
+        let ds = $.trim($('#calc_drop option:selected').text());
+        if (ds && ds.indexOf('--') === -1 && ds.indexOf('Select') === -1) drop = ds;
+    }
+    $('#pkg_modal_pickup').val(pickup);
+    $('#pkg_modal_drop').val(drop);
+
+    // Reset tour selection
+    $('#pkg_modal_tour_link').val('');
+    let $list = $('#pkg_modal_tour_list');
+    $list.html('<div style="padding:14px;text-align:center;color:#94a3b8;font-size:12px;">Loading tours…</div>');
+
     $.post(tcc_ajax_obj.ajax_url, {
         action: 'tcc_get_tours_for_pkg_link',
         security: tcc_ajax_obj.nonce
     }, function(res) {
-        let $sel = $('#pkg_modal_tour_link');
-        $sel.html('<option value="">— No Group Tour Linked —</option>');
+        $list.empty();
+
+        // "None" option
+        $list.append(buildTourCard('', '— No Group Tour Linked —', '', ''));
+
         if (res.success && res.data.length) {
             res.data.forEach(function(t) {
-                $sel.append('<option value="' + t.id + '">' + t.title + '</option>');
+                $list.append(buildTourCard(t.id, t.title, t.shortcode, t.triple_price));
             });
+        } else {
+            $list.append('<div style="padding:10px 14px;font-size:11px;color:#94a3b8;">No group tours found. Create one in the Calculator first.</div>');
         }
     });
 
@@ -3638,6 +3723,9 @@ $('#pkg_modal_submit').on('click', function() {
     let dest        = $('#pkg_modal_destination').val();
     let tourId      = $('#pkg_modal_tour_link').val();
     let existingId  = $('#pkg_modal_existing_id').val();
+    // Read from hidden fields (set when modal opened or sync clicked)
+    let pickup      = $('#pkg_modal_pickup').val();
+    let drop        = $('#pkg_modal_drop').val();
 
     if (!displayName) {
         tccShowToast("Please enter a public name for this package.", true);
@@ -3655,7 +3743,9 @@ $('#pkg_modal_submit').on('click', function() {
         preset_name:    presetName,
         display_name:   displayName,
         linked_tour_id: tourId,
-        existing_id:    existingId
+        existing_id:    existingId,
+        pickup:         pickup,
+        drop:           drop
     }, function(res) {
         btn.text(origText).prop('disabled', false);
         if (res.success) {
@@ -3684,7 +3774,7 @@ function loadPublishedPackages() {
     let $el = $('#tcc_packages_list');
     if (!$el.length) return;
 
-    $el.html('<div style="padding:15px;text-align:center;color:#64748b;">Loading…</div>');
+    $el.html('<div style="padding:20px;text-align:center;color:#94a3b8;font-size:13px;">Loading packages…</div>');
 
     $.post(tcc_ajax_obj.ajax_url, {
         action: 'tcc_list_all_packages',
@@ -3693,57 +3783,213 @@ function loadPublishedPackages() {
         if (!res.success) return;
 
         if (res.data.length === 0) {
-            $el.html('<div style="padding:20px;text-align:center;color:#64748b;">No packages published yet.<br><br>Load a preset in the <strong>Calculator</strong> tab, then click <strong style="color:#10b981;">🌐 Publish</strong>.</div>');
+            $el.html(
+                '<div style="padding:32px 20px;text-align:center;color:#64748b;">'
+                + '<div style="font-size:32px;margin-bottom:10px;">📦</div>'
+                + '<div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px;">No packages yet</div>'
+                + '<div style="font-size:12px;">Load a preset in the <strong>Calculator</strong> tab, then click <strong style="color:#10b981;">🌐 Publish</strong>.</div>'
+                + '</div>'
+            );
             return;
         }
 
-        let html = '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
-            + '<tr style="background:#f1f5f9;border-bottom:1px solid #cbd5e1;">'
-            + '<th style="padding:8px;text-align:left;">Package Name</th>'
-            + '<th style="padding:8px;text-align:center;">Destination</th>'
-            + '<th style="padding:8px;text-align:center;">Days</th>'
-            + '<th style="padding:8px;text-align:center;">Status</th>'
-            + '<th style="padding:8px;text-align:right;">Actions</th>'
-            + '</tr>';
+        // Table styles injected once
+        let css = '<style>'
+            + '#tcc_packages_list table{width:100%;border-collapse:collapse;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}'
+            + '#tcc_packages_list thead tr{background:#f8fafc;border-bottom:2px solid #e2e8f0}'
+            + '#tcc_packages_list thead th{padding:10px 12px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:#64748b}'
+            + '#tcc_packages_list tbody tr{border-bottom:1px solid #f1f5f9;transition:background .15s}'
+            + '#tcc_packages_list tbody tr:hover{background:#fafbff}'
+            + '#tcc_packages_list tbody tr:last-child{border-bottom:none}'
+            + '#tcc_packages_list tbody td{padding:12px;vertical-align:middle}'
+            + '.pkg-action-btn{display:inline-flex;align-items:center;gap:4px;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;text-decoration:none!important}'
+            + '.pkg-view-btn{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}'
+            + '.pkg-view-btn:hover{background:#dbeafe}'
+            + '.pkg-sync-btn{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}'
+            + '.pkg-sync-btn:hover{background:#dcfce7}'
+            + '.pkg-toggle-btn{background:#fffbeb;color:#92400e;border:1px solid #fde68a}'
+            + '.pkg-toggle-btn:hover{background:#fef3c7}'
+            + '.pkg-toggle-btn.is-live{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}'
+            + '.pkg-toggle-btn.is-live:hover{background:#fee2e2}'
+            + '.pkg-del-btn{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}'
+            + '.pkg-del-btn:hover{background:#fee2e2}'
+            + '.pkg-img-btn{display:inline-flex;align-items:center;gap:3px;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;margin-top:5px}'
+            + '.pkg-img-btn:hover{background:#e2e8f0;color:#0f172a}'
+            + '</style>';
+
+        let html = css
+            + '<table>'
+            + '<thead><tr>'
+            + '<th style="width:80px;text-align:left;">Image</th>'
+            + '<th style="text-align:left;">Package</th>'
+            + '<th style="width:60px;text-align:center;">Days</th>'
+            + '<th style="width:80px;text-align:center;">Status</th>'
+            + '<th style="width:240px;text-align:right;">Actions</th>'
+            + '</tr></thead>'
+            + '<tbody>';
 
         res.data.forEach(function(p) {
-            let badge = p.status === 'publish'
-                ? '<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:10px;font-weight:700;font-size:10px;">🟢 Live</span>'
-                : '<span style="background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:10px;font-weight:700;font-size:10px;">⚫ Draft</span>';
 
-            html += '<tr style="border-bottom:1px solid #f8fafc;">'
-                + '<td style="padding:8px;font-weight:bold;color:#0f172a;">' + p.title + '</td>'
-                + '<td style="padding:8px;text-align:center;color:#64748b;">' + (p.destination || '—') + '</td>'
-                + '<td style="padding:8px;text-align:center;">' + (p.days || '—') + 'D</td>'
-                + '<td style="padding:8px;text-align:center;">' + badge + '</td>'
-                + '<td style="padding:8px;text-align:right;white-space:nowrap;">'
-                + '<a href="' + p.permalink + '" target="_blank" style="color:#2563eb;font-size:11px;margin-right:8px;text-decoration:underline;">View →</a>'
-                + '<button type="button" class="sync-pkg-btn tcc-btn-secondary" data-id="' + p.id + '" data-preset="' + p.preset_name + '" data-dest="' + (p.destination || '') + '" style="font-size:10px;padding:2px 8px;margin:0 4px 0 0;">🔄 Sync</button>'
-                + '<button type="button" class="toggle-pkg-btn" data-id="' + p.id + '" data-status="' + p.status + '" style="background:none;border:none;color:#d97706;cursor:pointer;font-size:11px;text-decoration:underline;margin-right:6px;">'
-                + (p.status === 'publish' ? 'Unpublish' : 'Publish')
-                + '</button>'
-                + '<button type="button" class="del-pkg-btn" data-id="' + p.id + '" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:11px;text-decoration:underline;">Del</button>'
-                + '</td></tr>';
+            // Status badge
+            let badge = p.status === 'publish'
+                ? '<span style="display:inline-flex;align-items:center;gap:4px;background:#dcfce7;color:#166534;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;border:1px solid #bbf7d0;">'
+                  + '<span style="width:6px;height:6px;background:#16a34a;border-radius:50%;display:inline-block;"></span>Live</span>'
+                : '<span style="display:inline-flex;align-items:center;gap:4px;background:#f1f5f9;color:#64748b;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;border:1px solid #e2e8f0;">'
+                  + '<span style="width:6px;height:6px;background:#94a3b8;border-radius:50%;display:inline-block;"></span>Draft</span>';
+
+            // Package thumbnail
+            let thumb = p.thumb
+                ? '<img src="' + p.thumb + '" id="pkg-thumb-' + p.id + '" style="width:60px;height:48px;object-fit:cover;border-radius:7px;border:1px solid #e2e8f0;display:block;">'
+                : '<div id="pkg-thumb-' + p.id + '" style="width:60px;height:48px;background:#f1f5f9;border:1.5px dashed #cbd5e1;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:20px;">🖼</div>';
+            thumb += '<button type="button" class="pkg-img-btn" data-id="' + p.id + '">'
+                   + (p.thumb ? '✎ Change' : '+ Add Image') + '</button>';
+
+            // Vehicle image button (only for group tours)
+            let vehicleBtn = '';
+            if (p.linked_tour) {
+                let vImgPreview = p.vehicle_img
+                    ? '<img id="veh-img-' + p.linked_tour + '" src="' + p.vehicle_img + '" style="width:60px;height:38px;object-fit:cover;border-radius:5px;border:1px solid #fde68a;display:block;margin-bottom:3px;">'
+                    : '<div id="veh-img-' + p.linked_tour + '" style="width:60px;height:38px;background:#fffbeb;border:1.5px dashed #fde68a;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:16px;margin-bottom:3px;">🚐</div>';
+                vehicleBtn = vImgPreview
+                    + '<button type="button" class="veh-img-btn" data-tour="' + p.linked_tour + '" '
+                    + 'style="font-size:9px;padding:2px 6px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:4px;cursor:pointer;white-space:nowrap;font-family:inherit;">'
+                    + (p.vehicle_img ? '✎ Veh. Img' : '+ Veh. Img') + '</button>';
+            }
+
+            // Toggle label
+            let toggleLabel = p.status === 'publish' ? 'Unpublish' : 'Publish';
+            let toggleClass  = p.status === 'publish' ? 'pkg-action-btn pkg-toggle-btn is-live' : 'pkg-action-btn pkg-toggle-btn';
+
+            html += '<tr>'
+                // Image cell (package thumb + vehicle img for group tours)
+                + '<td style="width:80px;">'
+                +   '<div style="margin-bottom:6px;">' + thumb + '</div>'
+                +   (vehicleBtn ? '<div>' + vehicleBtn + '</div>' : '')
+                + '</td>'
+                // Name + destination
+                + '<td>'
+                +   '<div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:3px;">' + p.title + '</div>'
+                +   (p.destination ? '<div style="font-size:11px;color:#64748b;display:flex;align-items:center;gap:4px;"><span style="font-size:12px;">📍</span>' + p.destination + '</div>' : '')
+                + '</td>'
+                // Days
+                + '<td style="text-align:center;font-size:13px;font-weight:800;color:#0f172a;">' + (p.days || '—') + '<span style="font-size:10px;font-weight:500;color:#94a3b8;">D</span></td>'
+                // Status
+                + '<td style="text-align:center;">' + badge + '</td>'
+                // Actions — all in one tidy row
+                + '<td style="text-align:right;">'
+                +   '<div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;">'
+                +     '<a href="' + p.permalink + '" target="_blank" class="pkg-action-btn pkg-view-btn">↗ View</a>'
+                +     '<button type="button" class="pkg-action-btn pkg-sync-btn sync-pkg-btn" data-id="' + p.id + '" data-preset="' + p.preset_name + '" data-dest="' + (p.destination || '') + '">↻ Sync</button>'
+                +     '<button type="button" class="' + toggleClass + ' toggle-pkg-btn" data-id="' + p.id + '" data-status="' + p.status + '">' + toggleLabel + '</button>'
+                +     '<button type="button" class="pkg-action-btn pkg-del-btn del-pkg-btn" data-id="' + p.id + '">Del</button>'
+                +   '</div>'
+                + '</td>'
+                + '</tr>';
         });
 
-        html += '</table>';
-
-        // ── No shortcode display here on purpose ──
-        // Shortcode examples are rendered in PHP (render_settings_panel) with
-        // HTML-entity-escaped brackets &#91; &#93; so WordPress cannot execute
-        // them. Putting raw [tcc_packages] in JS-injected HTML risks execution
-        // by page builders / caching plugins.
-
+        html += '</tbody></table>';
         $el.html(html);
     });
 }
+
+// ── Vehicle image upload (for group tour fixed departure) ────────────────────
+var tccVehMedia = {};
+$(document).on('click', '.veh-img-btn', function() {
+    var tourId = $(this).data('tour');
+    var $btn   = $(this);
+
+    if ( typeof wp === 'undefined' || !wp.media ) {
+        alert('Media uploader not available on this page.');
+        return;
+    }
+
+    if ( !tccVehMedia[tourId] ) {
+        tccVehMedia[tourId] = wp.media({
+            title:    'Select Vehicle Image',
+            button:   { text: 'Use This Image' },
+            multiple: false,
+            library:  { type: 'image' }
+        });
+        tccVehMedia[tourId].on('select', function() {
+            var att = tccVehMedia[tourId].state().get('selection').first().toJSON();
+            $btn.text('Saving…').prop('disabled', true);
+            $.post(tcc_ajax_obj.ajax_url, {
+                action:   'tcc_set_vehicle_image',
+                security: tcc_ajax_obj.nonce,
+                tour_id:  tourId,
+                att_id:   att.id
+            }, function(res) {
+                $btn.prop('disabled', false);
+                if (res.success) {
+                    var $cell = $('#veh-img-' + tourId);
+                    $cell.replaceWith(
+                        '<img id="veh-img-' + tourId + '" src="' + res.data.img
+                        + '" style="width:60px;height:38px;object-fit:cover;border-radius:5px;border:1px solid #fde68a;display:block;margin-bottom:3px;">'
+                    );
+                    $btn.text('✎ Veh. Img');
+                    tccShowToast('Vehicle image updated!', false);
+                } else {
+                    tccShowToast('Error saving vehicle image.', true);
+                    $btn.text('+ Veh. Img');
+                }
+            });
+        });
+    }
+    tccVehMedia[tourId].open();
+});
+
+// ── Image upload / update per package ────────────────────────────────────────
+var tccImgMedia = {};
+$(document).on('click', '.pkg-img-btn', function() {
+    var postId = $(this).data('id');
+    var $btn   = $(this);
+
+    if ( typeof wp === 'undefined' || !wp.media ) {
+        alert('Media uploader not available on this page.');
+        return;
+    }
+
+    if ( !tccImgMedia[postId] ) {
+        tccImgMedia[postId] = wp.media({
+            title:    'Select Package Image',
+            button:   { text: 'Use This Image' },
+            multiple: false,
+            library:  { type: 'image' }
+        });
+        tccImgMedia[postId].on('select', function() {
+            var att = tccImgMedia[postId].state().get('selection').first().toJSON();
+            $btn.text('Saving…').prop('disabled', true);
+            $.post(tcc_ajax_obj.ajax_url, {
+                action:   'tcc_set_package_image',
+                security: tcc_ajax_obj.nonce,
+                post_id:  postId,
+                att_id:   att.id
+            }, function(res) {
+                $btn.prop('disabled', false);
+                if (res.success) {
+                    // Update the thumbnail in the row immediately
+                    var $cell = $('#pkg-thumb-' + postId);
+                    if (res.data.thumb) {
+                        $cell.replaceWith('<img src="' + res.data.thumb + '" id="pkg-thumb-' + postId + '" style="width:52px;height:40px;object-fit:cover;border-radius:5px;border:1px solid #e2e8f0;display:block;margin-bottom:4px;">');
+                    }
+                    $btn.text('📷 Change');
+                    tccShowToast('Image updated!', false);
+                } else {
+                    tccShowToast('Error updating image.', true);
+                    $btn.text('📷 Change');
+                }
+            });
+        });
+    }
+    tccImgMedia[postId].open();
+});
 
 // ── Sync (re-publish) a package from its saved preset ───────────────────────
 $(document).on('click', '.sync-pkg-btn', function() {
     let id         = $(this).data('id');
     let presetName = $(this).data('preset');
     let dest       = $(this).data('dest');
-    let title      = $(this).closest('tr').find('td:first').text().trim();
+    let title      = $(this).closest('tr').find('td').eq(1).children('div').first().text().trim();
 
     $('#pkg_modal_name').val(title);
     $('#pkg_modal_preset_name').val(presetName);
@@ -3751,13 +3997,31 @@ $(document).on('click', '.sync-pkg-btn', function() {
     $('#pkg_modal_existing_id').val(id);
     $('#pkg_modal_msg').hide();
 
-    $('#pkg_modal_tour_link').html('<option value="">Loading…</option>');
+    // Pre-fill pickup/drop from current form state
+    let pickup = $.trim($('#calc_pickup_custom').val());
+    if (!pickup) {
+        let ps = $.trim($('#calc_pickup option:selected').text());
+        if (ps && ps.indexOf('--') === -1 && ps.indexOf('Select') === -1) pickup = ps;
+    }
+    let drop = $.trim($('#calc_drop_custom').val());
+    if (!drop) {
+        let ds = $.trim($('#calc_drop option:selected').text());
+        if (ds && ds.indexOf('--') === -1 && ds.indexOf('Select') === -1) drop = ds;
+    }
+    // Store for submit handler to pick up
+    $('#pkg_modal_pickup').val(pickup);
+    $('#pkg_modal_drop').val(drop);
+
+    $('#pkg_modal_tour_link').val('');
+    let $listS = $('#pkg_modal_tour_list');
+    $listS.html('<div style="padding:14px;text-align:center;color:#94a3b8;font-size:12px;">Loading tours…</div>');
+
     $.post(tcc_ajax_obj.ajax_url, { action: 'tcc_get_tours_for_pkg_link', security: tcc_ajax_obj.nonce }, function(r) {
-        let $sel = $('#pkg_modal_tour_link');
-        $sel.html('<option value="">— No Group Tour Linked —</option>');
+        $listS.empty();
+        $listS.append(buildTourCard('', '— No Group Tour Linked —', '', ''));
         if (r.success && r.data.length) {
             r.data.forEach(function(t) {
-                $sel.append('<option value="' + t.id + '">' + t.title + '</option>');
+                $listS.append(buildTourCard(t.id, t.title, t.shortcode, t.triple_price));
             });
         }
         $('#tcc-pkg-modal-wrap').css('display', 'flex');
@@ -3796,5 +4060,114 @@ $(document).on('click', '.tcc-accordion-header', function() {
     if ($(this).next('.tcc-accordion-body').find('#tcc_packages_list').length) {
         setTimeout(loadPublishedPackages, 200);
     }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PRESET EXTRAS HOOK — fires after "Save as Preset" to attach:
+//   Adults, Rooms, Extra Beds, PP Price, Vehicles, Add-on names, Pickup, Drop
+// This is a SILENT background call — no UI feedback to the user.
+// ═══════════════════════════════════════════════════════════════════════════
+$(document).on('click', '#save_itinerary_preset', function() {
+    var presetName = $('#new_preset_name').val().trim();
+    var dest       = $('#calc_destination').val();
+    if (!presetName || !dest) return; // let existing handler show error
+
+    // Delay to let the existing preset-save AJAX complete first
+    setTimeout(function() {
+
+        // ── Adults, Rooms, Extra Beds ───────────────────────────────────────
+        var adults    = parseInt($('#total_pax').val(),    10) || 0;
+        var rooms     = parseInt($('#no_of_rooms').val(),  10) || 0;
+        var extraBeds = parseInt($('#extra_beds').val(),   10) || 0;
+
+        // ── PP Price (Inc GST) from Final Adjustments & Overview ─────────────
+        var pricePP = $.trim($('#live_pp_inc').text());
+        // Normalise: keep only if it contains a digit (e.g. "₹4,250.00")
+        if (!/\d/.test(pricePP)) pricePP = '';
+
+        // ── Pickup location — custom text wins, else select option text ───────
+        var pickup = $.trim($('#calc_pickup_custom').val());
+        if (!pickup) {
+            var pickupSel = $.trim($('#calc_pickup option:selected').text());
+            if (pickupSel && pickupSel.indexOf('--') === -1 && pickupSel.indexOf('Select') === -1) {
+                pickup = pickupSel;
+            }
+        }
+
+        // ── Drop location — custom text wins, else select option text ─────────
+        var drop = $.trim($('#calc_drop_custom').val());
+        if (!drop) {
+            var dropSel = $.trim($('#calc_drop option:selected').text());
+            if (dropSel && dropSel.indexOf('--') === -1 && dropSel.indexOf('Select') === -1) {
+                drop = dropSel;
+            }
+        }
+
+        // ── Vehicles — read selects in transport-wrapper, skip location values ─
+        // Each vehicle row may also contain a "from/to location" select.
+        // Build a set of all known location names from pickup/drop dropdowns
+        // so we can exclude them from the vehicle list.
+        var locationNames = {};
+        $('#calc_pickup option, #calc_drop option').each(function() {
+            var name = $.trim($(this).text());
+            if (name && name.indexOf('--') === -1 && name.indexOf('Select') === -1) {
+                locationNames[name.toLowerCase()] = true;
+            }
+        });
+
+        var vehicles = [];
+        $('#transport-wrapper select').each(function() {
+            var txt = $.trim($(this).find('option:selected').text());
+            if (!txt || txt.indexOf('--') !== -1 || txt.indexOf('Select') !== -1) return;
+            // Skip if this value is a known location name
+            if (locationNames[txt.toLowerCase()]) return;
+            vehicles.push(txt);
+        });
+        // Fallback: look for input text fields that hold vehicle name
+        if (!vehicles.length) {
+            $('#transport-wrapper').find('input[type="text"]').each(function() {
+                var v = $.trim($(this).val());
+                if (v && !locationNames[v.toLowerCase()]) vehicles.push(v);
+            });
+        }
+
+        // ── Add-on names — read first text input in each addon row ───────────
+        var addons = [];
+        $('#addons-wrapper').children().each(function() {
+            // First text input in each row is the addon name
+            var $nameInput = $(this).find('input[type="text"]').first();
+            if ($nameInput.length) {
+                var name = $.trim($nameInput.val());
+                if (name) addons.push(name);
+            }
+        });
+        // Fallback: data-addon or .addon-name elements
+        if (!addons.length) {
+            $('#addons-wrapper [data-addon-name], #addons-wrapper .addon-name').each(function() {
+                var n = $.trim($(this).attr('data-addon-name') || $(this).text());
+                if (n) addons.push(n);
+            });
+        }
+
+        // Skip if nothing meaningful to save
+        if (adults < 1 && rooms < 1 && !pricePP && !pickup && !drop && !vehicles.length && !addons.length) return;
+
+        $.post(tcc_ajax_obj.ajax_url, {
+            action:      'tcc_save_preset_extras',
+            security:    tcc_ajax_obj.nonce,
+            destination: dest,
+            preset_name: presetName,
+            adults:      adults,
+            rooms:       rooms,
+            extra_beds:  extraBeds,
+            price_pp:    pricePP,
+            pickup:      pickup,
+            drop:        drop,
+            vehicles:    JSON.stringify(vehicles),
+            addons:      JSON.stringify(addons)
+        });
+        // Silent — no toast or feedback on success
+
+    }, 900); // 900ms after click gives existing save AJAX time to finish
 });
 });

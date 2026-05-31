@@ -311,6 +311,7 @@ jQuery(document).ready(function($) {
         if(!tid) {
             $('#tcc-adv-fixed-tour-form')[0].reset();
             $('#fd_tour_id').val('');
+            $('#fd_addons').val('');
             $('#fd_dates_wrapper, #fd-day-wise-wrapper, #fd-night-stay-wrapper').empty();
             $('.ql-editor').html(''); 
             $('#fd_delete_tour_btn, #fd_duplicate_tour_btn').hide();
@@ -329,6 +330,7 @@ jQuery(document).ready(function($) {
                 
                 $('#fd_transport_details').val(d.transport_details);
                 $('#fd_pickup').val(d.pickup); $('#fd_drop').val(d.drop); $('#fd_head_office').val(d.head_office);
+                $('#fd_addons').val(d.addons || '');
 
                 setTimeout(() => {
                     ['inclusions', 'exclusions', 'payment_terms', 'important_note', 'why_choose_us', 'essential_guidelines'].forEach(key => {
@@ -419,6 +421,7 @@ jQuery(document).ready(function($) {
             fd_dates: JSON.stringify(fd_dates), fd_itinerary_data: JSON.stringify(itineraryData),
             pickup: $('#fd_pickup').val(), drop: $('#fd_drop').val(),
             transport_details: $('#fd_transport_details').val(), head_office: $('#fd_head_office').val(),
+            addons: $('#fd_addons').val(),
             inclusions: $('#fd_inclusions').val(), exclusions: $('#fd_exclusions').val(),
             payment_terms: $('#fd_payment_terms').val(), important_note: $('#fd_important_note').val(),
             why_choose_us: $('#fd_why_choose_us').val(), essential_guidelines: $('#fd_essential_guidelines').val()

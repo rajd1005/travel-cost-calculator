@@ -80,6 +80,11 @@ class TCC_Fixed_Departures {
         update_post_meta($post_id, '_tcc_drop', sanitize_text_field($_POST['drop']));
         update_post_meta($post_id, '_tcc_transport_details', sanitize_text_field($_POST['transport_details']));
         update_post_meta($post_id, '_tcc_head_office', wp_kses_post($_POST['head_office']));
+
+        // Trip Add-ons: save as JSON array for consistent reading by package pages
+        $addons_raw = sanitize_text_field( wp_unslash( isset( $_POST['addons'] ) ? $_POST['addons'] : '' ) );
+        $addon_arr  = array_values( array_filter( array_map( 'trim', explode( ',', $addons_raw ) ) ) );
+        update_post_meta( $post_id, '_tcc_tour_addons', wp_json_encode( $addon_arr ) );
         
         update_post_meta($post_id, '_tcc_inclusions', wp_kses_post($_POST['inclusions']));
         update_post_meta($post_id, '_tcc_exclusions', wp_kses_post($_POST['exclusions']));
@@ -354,6 +359,7 @@ class TCC_Fixed_Departures {
             'drop' => get_post_meta($tour->ID, '_tcc_drop', true),
             'transport_details' => get_post_meta($tour->ID, '_tcc_transport_details', true),
             'head_office' => get_post_meta($tour->ID, '_tcc_head_office', true),
+            'addons' => implode( ', ', json_decode( get_post_meta($tour->ID, '_tcc_tour_addons', true), true ) ?: array() ),
             'inclusions' => get_post_meta($tour->ID, '_tcc_inclusions', true),
             'exclusions' => get_post_meta($tour->ID, '_tcc_exclusions', true),
             'payment_terms' => get_post_meta($tour->ID, '_tcc_payment_terms', true),

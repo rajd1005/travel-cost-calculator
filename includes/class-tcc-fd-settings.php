@@ -95,6 +95,11 @@ class TCC_FD_Settings {
                         <div class="tcc-form-group"><label>Pickup Point</label><input type="text" id="fd_pickup"></div>
                         <div class="tcc-form-group"><label>Drop Point</label><input type="text" id="fd_drop"></div>
                     </div>
+
+                    <div class="tcc-form-group" style="margin-top:10px;">
+                        <label>✨ Trip Add-ons <small style="font-weight:normal; color:#64748b;">(Comma-separated — shown as pills on package page &amp; grid card)</small></label>
+                        <input type="text" id="fd_addons" placeholder="e.g. 1 Night Houseboat Stay, Shikara Ride, Gondola Ride" style="width:100%;">
+                    </div>
                     <div class="tcc-form-group">
                         <label>Operational Head Office Address</label>
                         <textarea id="fd_head_office" rows="2" placeholder="Leave blank to use default address..." style="width: 100%;"></textarea>
