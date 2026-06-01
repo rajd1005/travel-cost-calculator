@@ -74,9 +74,18 @@ class TCC_Packages {
         $title = get_the_title( $pid ) . ' | ' . $site;
 
         // ── META DESCRIPTION: Route + Day 1 Itinerary details ───────────────
-        $route          = get_post_meta( $pid, '_tcc_pkg_route', true );
-        $itinerary      = json_decode( get_post_meta( $pid, '_tcc_pkg_itinerary',      true ), true ) ?: array();
-        $itinerary_desc = json_decode( get_post_meta( $pid, '_tcc_pkg_itinerary_desc', true ), true ) ?: array();
+        // For group tour packages, read live from the fixed tour post.
+        $linked_tour_id = (int) get_post_meta( $pid, '_tcc_pkg_linked_tour', true );
+        if ( $linked_tour_id ) {
+            $tc             = self::get_tour_content( $linked_tour_id );
+            $route          = $tc['route'];
+            $itinerary      = $tc['itinerary'];
+            $itinerary_desc = $tc['itinerary_desc'];
+        } else {
+            $route          = get_post_meta( $pid, '_tcc_pkg_route', true );
+            $itinerary      = json_decode( get_post_meta( $pid, '_tcc_pkg_itinerary',      true ), true ) ?: array();
+            $itinerary_desc = json_decode( get_post_meta( $pid, '_tcc_pkg_itinerary_desc', true ), true ) ?: array();
+        }
 
         $desc_parts = array();
 
@@ -281,6 +290,11 @@ class TCC_Packages {
         // Group Tour Manager automatically updates all linked package pages.
         if ( $is_group_tour ) {
             $tc = self::get_tour_content( $linked_tour_id );
+
+            // ── Route: built live from itinerary_routes in Group Tour Manager ─
+            if ( $tc['route'] ) {
+                $route = $tc['route'];
+            }
 
             // ── Add-ons: tour-specific (new field, set via accordion 6) ──────
             if ( ! empty( $tc['addons'] ) ) {
@@ -1332,6 +1346,12 @@ function tpTab(btn, id){
             'inclusions'     => (string) $inclusions,
             'exclusions'     => (string) $exclusions,
             'payment_terms'  => (string) $payment_terms,
+            // Build route string from itinerary_routes (live from Group Tour Manager)
+            'route'          => implode( ' → ', array_filter(
+                                    isset( $itin_data['itinerary_routes'] )
+                                    ? array_map( 'trim', (array) $itin_data['itinerary_routes'] )
+                                    : array()
+                                ) ),
             // Itinerary: note tcc-script.js uses 'itinerary_image' (not 'itinerary_img')
             'itinerary'      => isset( $itin_data['itinerary'] )      ? (array) $itin_data['itinerary']      : array(),
             'itinerary_desc' => isset( $itin_data['itinerary_desc'] ) ? (array) $itin_data['itinerary_desc'] : array(),
@@ -1923,10 +1943,11 @@ function tpTab(btn, id){
         $display_price     = $group_price > 0 ? '₹' . number_format( $group_price, 0 ) : $price_pp;
         $display_price_sub = $group_price > 0 ? 'Triple Sharing · Per Person' : 'Per Person · Incl. GST';
 
-        // Override add-ons from group tour meta (live, auto-updates)
+        // Override add-ons and route from group tour meta (live, auto-updates)
         if ( $is_group_tour ) {
             $tc = self::get_tour_content( $linked_tour_id );
             if ( ! empty( $tc['addons'] ) ) $addons = $tc['addons'];
+            if ( $tc['route'] )             $route  = $tc['route'];
         }
 
         // Random enquiry count — changes every page reload

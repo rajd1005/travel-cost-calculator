@@ -49,6 +49,7 @@ require_once plugin_dir_path( __FILE__ ) . 'includes/class-tcc-frontend-ajax.php
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-tcc-fd-settings.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-tcc-api.php'; // Child Plugin REST API
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-tcc-packages.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/tcc-shortcode-reference.php';
 
 // REGISTER CUSTOM POST TYPE FOR QUOTES
 add_action( 'init', 'tcc_register_quote_cpt' );
