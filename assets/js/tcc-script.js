@@ -2,6 +2,8 @@ jQuery(document).ready(function($) {
 
     // === SECURITY NONCE INJECTION ===
     $.ajaxPrefilter(function(options, originalOptions, jqXHR) {
+        // [PATCH-C4A] Skip JSON payloads (backup import) to prevent corruption
+        if ( options.contentType && options.contentType.indexOf('application/json') !== -1 ) { return; }
         let token = typeof tcc_ajax_obj !== 'undefined' ? tcc_ajax_obj.nonce : (typeof tcc_exp_obj !== 'undefined' ? tcc_exp_obj.nonce : '');
         if (options.data) {
             if (typeof options.data === 'string') {

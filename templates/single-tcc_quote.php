@@ -1326,21 +1326,15 @@ function tccDownloadPDF(btn) {
     let actionField = document.createElement('input');
     actionField.type = 'hidden';
     actionField.name = 'action';
-    actionField.value = 'tcc_generate_server_pdf';
+    // [PATCH-C1D] Switched to tcc_front_generate_pdf — accepts quote_id only, no arbitrary HTML
+    actionField.value = 'tcc_front_generate_pdf';
     form.appendChild(actionField);
 
-    let htmlField = document.createElement('input');
-    htmlField.type = 'hidden';
-    htmlField.name = 'html';
-    // Must safely encode HTML so symbols don't break the POST request
-    htmlField.value = encodeURIComponent(htmlContent); 
-    form.appendChild(htmlField);
-
-    let titleField = document.createElement('input');
-    titleField.type = 'hidden';
-    titleField.name = 'title';
-    titleField.value = docTitle;
-    form.appendChild(titleField);
+    let quoteIdField = document.createElement('input');
+    quoteIdField.type = 'hidden';
+    quoteIdField.name = 'quote_id';
+    quoteIdField.value = '<?php echo (int) $post->ID; ?>';
+    form.appendChild(quoteIdField);
 
     document.body.appendChild(form);
     form.submit();
@@ -1372,9 +1366,9 @@ async function tccSharePDF(btn) {
 
     // 2. Prepare the data to send to your existing PDF generator
     let formData = new FormData();
-    formData.append('action', 'tcc_generate_server_pdf');
-    formData.append('html', encodeURIComponent(htmlContent));
-    formData.append('title', docTitle);
+    // [PATCH-C1D-SHARE] Switched to tcc_front_generate_pdf — quote_id only
+    formData.append('action', 'tcc_front_generate_pdf');
+    formData.append('quote_id', '<?php echo (int) $post->ID; ?>');
 
     try {
         // 3. Fetch the PDF stream directly into memory

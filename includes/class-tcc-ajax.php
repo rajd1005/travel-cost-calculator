@@ -72,7 +72,8 @@ add_action( 'wp_ajax_nopriv_tcc_delete_single_day_preset', 'tcc_delete_single_da
 
 // SERVER-SIDE PDF GENERATION ACTION
 add_action( 'wp_ajax_tcc_generate_server_pdf', 'tcc_generate_server_pdf' );
-add_action( 'wp_ajax_nopriv_tcc_generate_server_pdf', 'tcc_generate_server_pdf' );
+// [PATCH-C1A] Unauthenticated PDF endpoint removed — prevented SSRF/DoS attacks.
+// add_action( 'wp_ajax_nopriv_tcc_generate_server_pdf', 'tcc_generate_server_pdf' );
 
 // =========================================================================
 // SAFE JSON RETRIEVAL HELPER (Maintains backward compatibility for older quotes)
@@ -1077,6 +1078,7 @@ function tcc_save_master_settings() {
     $important_note = isset($_POST['master_important_note']) ? wp_unslash($_POST['master_important_note']) : '';
     $why_choose_us = isset($_POST['master_why_choose_us']) ? wp_unslash($_POST['master_why_choose_us']) : '';
     $essential_guidelines = isset($_POST['master_essential_guidelines']) ? wp_unslash($_POST['master_essential_guidelines']) : '';
+    $share_cab_cost = isset( $_POST['share_cab_cost'] ) ? 1 : 0; // [PATCH-C2] Variable was undefined — caused silent null on every Destination Setup save
 
     $season_starts = isset($_POST['season_start']) ? $_POST['season_start'] : [];
     $season_ends   = isset($_POST['season_end']) ? $_POST['season_end'] : [];
@@ -1699,6 +1701,7 @@ function tcc_export_backup() {
 // ---------------------------------------------------------------------------
 function tcc_import_backup() {
     if ( ! is_user_logged_in() ) { wp_send_json_error( 'You must be logged in to import backups.' ); wp_die(); }
+    if ( ! current_user_can( 'manage_options' ) ) { wp_send_json_error( 'Administrator access required to restore backups.' ); wp_die(); } // [PATCH-C4B] Capability check added
 
     $raw_body = file_get_contents( 'php://input' );
 
@@ -2035,6 +2038,8 @@ function tcc_delete_single_day_preset() {
 }
 
 function tcc_generate_server_pdf() {
+    // [PATCH-C1B] Auth check added — rejects unauthenticated callers
+    if ( ! is_user_logged_in() ) { status_header( 401 ); wp_die( 'Unauthorized.' ); }
     $dompdf_path = plugin_dir_path( __FILE__ ) . 'dompdf/autoload.inc.php';
     if ( ! file_exists( $dompdf_path ) ) {
         wp_die('Dompdf library is missing. Please upload it to your includes/dompdf/ folder.');
@@ -2124,7 +2129,7 @@ function tcc_generate_server_pdf() {
     </html>';
 
     $options = new \Dompdf\Options();
-    $options->set('isRemoteEnabled', true); 
+    $options->set('isRemoteEnabled', false); // [PATCH-C1C] Remote fetch disabled — images are base64-inlined above, PDF output unaffected 
     $options->set('isHtml5ParserEnabled', true);
     $options->set('defaultFont', 'DejaVu Sans'); 
     

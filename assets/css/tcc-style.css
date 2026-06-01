@@ -516,6 +516,7 @@
 
 .tcc-wrapper .fd-date-btn-modern.selected .fd-date-check {
     display: flex;
+} /* [PATCH-C3] Missing closing brace restored — calculator toggle buttons now styled correctly */
 /* --- CALCULATOR MODE TOGGLE (MATCHES FD DATES EXACTLY) --- */
 
 /* 1. Fully hide the default radio input so it doesn't break layout (Overriding WP Core CSS) */
